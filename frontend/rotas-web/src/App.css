@@ -1,0 +1,163 @@
+.app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+.sidebar {
+  width: 320px;
+  flex-shrink: 0;
+  height: 100%;
+  background-color: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+.sidebar-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.sidebar-header p {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.field select {
+  padding: 9px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: #ffffff;
+  font-size: 14px;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.field select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.route-status {
+  background-color: #f3f4f6;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+  color: #374151;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.route-status strong {
+  color: #111827;
+}
+
+.sidebar-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.button {
+  flex: 1;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button-primary {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+.button-primary:hover:not(:disabled) {
+  background-color: #1d4ed8;
+}
+
+.button-secondary {
+  background-color: #e5e7eb;
+  color: #374151;
+}
+
+.button-secondary:hover {
+  background-color: #d1d5db;
+}
+
+.error-box {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+  color: #b91c1c;
+}
+
+.result-card {
+  border: 1px solid #e5e7eb;
+  background-color: #f8fafc;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.result-card h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 10px;
+}
+
+.result-distance {
+  font-size: 26px;
+  font-weight: 800;
+  color: #2563eb;
+}
+
+.result-meta {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.result-meta strong {
+  color: #111827;
+}
+
+.result-path {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #374151;
+  background-color: #eef2ff;
+  border-radius: 8px;
+  padding: 10px;
+}
