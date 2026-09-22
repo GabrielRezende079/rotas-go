@@ -1,18 +1,18 @@
+import { useEffect } from 'react'
 import 'leaflet/dist/leaflet.css'
 import * as L from 'leaflet'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import {
-  CircleMarker,
   MapContainer,
   Marker,
   Polyline,
   TileLayer,
-  Tooltip,
+  useMap,
   useMapEvents,
 } from 'react-leaflet'
-import type { GraphNode, LatLng, RouteResponse } from '../types'
+import type { LatLng, RouteResponse } from '../types'
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
@@ -58,14 +58,27 @@ function MapClickHandler({
         onDestinationChange(position)
       } else {
         onClear()
+        onOriginChange(position)
       }
     },
   })
   return null
 }
 
+function FitRoute({ geometry }: { geometry: LatLng[] }) {
+  const map = useMap()
+  useEffect(() => {
+    if (geometry.length > 1) {
+      map.fitBounds(
+        geometry.map((point) => [point.lat, point.lng] as [number, number]),
+        { padding: [32, 32] },
+      )
+    }
+  }, [geometry, map])
+  return null
+}
+
 interface RouteMapProps {
-  nodes: GraphNode[]
   origin: LatLng | null
   destination: LatLng | null
   response: RouteResponse | null
@@ -75,7 +88,6 @@ interface RouteMapProps {
 }
 
 function RouteMap({
-  nodes,
   origin,
   destination,
   response,
@@ -85,7 +97,7 @@ function RouteMap({
 }: RouteMapProps) {
   return (
     <div className="map-container">
-      <MapContainer center={[-20.19, -40.3]} zoom={8}>
+      <MapContainer center={[-19.6, -40.65]} zoom={8}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -97,16 +109,6 @@ function RouteMap({
           onDestinationChange={onDestinationChange}
           onClear={onClear}
         />
-        {nodes.map((node) => (
-          <CircleMarker
-            key={node.name}
-            center={[node.lat, node.lng]}
-            radius={4}
-            pathOptions={{ color: '#6b7280', fillColor: '#374151', fillOpacity: 0.85, weight: 1 }}
-          >
-            <Tooltip>{node.name}</Tooltip>
-          </CircleMarker>
-        ))}
         {origin !== null && (
           <Marker
             position={[origin.lat, origin.lng]}
@@ -134,10 +136,13 @@ function RouteMap({
           />
         )}
         {response !== null && (
-          <Polyline
-            positions={response.path.map((node) => [node.lat, node.lng])}
-            pathOptions={{ color: '#2563eb', weight: 4 }}
-          />
+          <>
+            <Polyline
+              positions={response.geometry.map((point) => [point.lat, point.lng])}
+              pathOptions={{ color: '#2563eb', weight: 5 }}
+            />
+            <FitRoute geometry={response.geometry} />
+          </>
         )}
       </MapContainer>
     </div>

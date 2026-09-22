@@ -1,4 +1,4 @@
-import type { Algorithm, LatLng, RouteResponse } from '../types'
+import type { Algorithm, GraphInfo, LatLng, RouteResponse } from '../types'
 
 interface RoutePanelProps {
   algorithm: Algorithm
@@ -8,6 +8,7 @@ interface RoutePanelProps {
   loading: boolean
   error: string | null
   result: RouteResponse | null
+  graphInfo: GraphInfo | null
   onCalculate: () => void
   onClear: () => void
 }
@@ -20,6 +21,7 @@ function RoutePanel({
   loading,
   error,
   result,
+  graphInfo,
   onCalculate,
   onClear,
 }: RoutePanelProps) {
@@ -30,10 +32,20 @@ function RoutePanel({
       <header className="sidebar-header">
         <h1>Rotas Go</h1>
         <p>
-          Projeto acadêmico de Teoria dos Grafos que calcula a menor rota entre cidades do Espírito
-          Santo com Dijkstra ou A*.
+          Menor rota na malha viária real do Espírito Santo, calculada pelo nosso próprio Dijkstra
+          ou A*.
         </p>
       </header>
+
+      {graphInfo !== null && (
+        <div className={graphInfo.real_road_graph ? 'graph-status graph-status-real' : 'graph-status'}>
+          <strong>{graphInfo.real_road_graph ? 'Malha OSM real carregada' : 'Modo didático'}</strong>
+          <span>
+            {graphInfo.vertices.toLocaleString('pt-BR')} vértices ·{' '}
+            {graphInfo.edges.toLocaleString('pt-BR')} arestas
+          </span>
+        </div>
+      )}
 
       <div className="field">
         <label htmlFor="algorithm">Algoritmo</label>
@@ -88,7 +100,17 @@ function RoutePanel({
           <p className="result-meta">
             <strong>Nós visitados:</strong> {result.nodes_visited}
           </p>
-          <p className="result-path">{result.path.map((node) => node.name).join(' → ')}</p>
+          <p className="result-meta">
+            <strong>Tempo estimado:</strong> {result.estimated_duration_minutes.toFixed(1)} min
+          </p>
+          <p className="result-meta">
+            <strong>Tempo do algoritmo:</strong> {result.search_time_ms.toFixed(3)} ms
+          </p>
+          <p className="result-meta">
+            <strong>Geometria:</strong> {result.geometry.length.toLocaleString('pt-BR')} pontos da
+            malha viária
+          </p>
+          <p className="result-source">Fonte: {result.data_source}</p>
         </div>
       )}
     </aside>

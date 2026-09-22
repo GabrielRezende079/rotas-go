@@ -1,8 +1,8 @@
 package grafo
 
-// Aresta liga dois vértices com peso em quilômetros.
+// Aresta é uma ligação direcionada entre dois nós da malha viária.
 type Aresta struct {
-	Origem  string
-	Destino string
-	PesoKm  float64
+	Destino     int64
+	DistanciaKm float64
+	DuracaoMin  float64
 }

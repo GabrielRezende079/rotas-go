@@ -2,6 +2,9 @@ package main
 
 import (
 	"log"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -10,19 +13,44 @@ import (
 )
 
 func main() {
-	// O grafo é construído fora do pacote de rotas e injetado no serviço.
-	grafoES := grafo.NovoGrafoES()
-	service := routes.NewRouteService(grafoES)
-	controller := routes.NewRouteController(service)
+	g := carregarGrafo()
+	meta := g.Metadata()
+	log.Printf(
+		"grafo carregado: fonte=%q vertices=%d arestas=%d gerado_em=%s",
+		meta.Fonte,
+		meta.Vertices,
+		meta.Arestas,
+		meta.GeradoEm.Format(time.RFC3339),
+	)
 
+	service := routes.NewRouteService(g)
+	controller := routes.NewRouteController(service)
 	engine := gin.Default()
+	_ = engine.SetTrustedProxies(nil)
 	engine.Use(routes.CORSMiddleware())
 
+	engine.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	})
 	api := engine.Group("/api/v1")
-	api.GET("/nodes", controller.ListarNos)
+	api.GET("/info", controller.Info)
 	api.POST("/route", controller.CalcularRota)
 
 	if err := engine.Run(":8080"); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func carregarGrafo() *grafo.Grafo {
+	caminho := os.Getenv("ROTAS_GRAPH_FILE")
+	if caminho == "" {
+		caminho = filepath.Clean("../data/es-road.graph.gz")
+	}
+	if g, err := grafo.CarregarArquivo(caminho); err == nil {
+		return g
+	} else if !os.IsNotExist(err) {
+		log.Printf("não foi possível carregar %s: %v", caminho, err)
+	}
+	log.Printf("ATENÇÃO: %s não existe; usando grafo didático", caminho)
+	return grafo.NovoGrafoESDidatico()
 }

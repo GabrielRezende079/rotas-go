@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { calculateRoute, getNodes } from './api/routes'
+import { calculateRoute, getGraphInfo } from './api/routes'
 import RouteMap from './components/RouteMap'
 import RoutePanel from './components/RoutePanel'
-import type { Algorithm, GraphNode, LatLng, RouteResponse } from './types'
+import type { Algorithm, GraphInfo, LatLng, RouteResponse } from './types'
 import './App.css'
 
 function App() {
@@ -12,15 +12,23 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<RouteResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [nodes, setNodes] = useState<GraphNode[]>([])
+  const [graphInfo, setGraphInfo] = useState<GraphInfo | null>(null)
 
   useEffect(() => {
-    getNodes()
-      .then(setNodes)
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Não foi possível carregar os nós do grafo')
-      })
+    getGraphInfo().then(setGraphInfo).catch(() => setGraphInfo(null))
   }, [])
+
+  const changeOrigin = (position: LatLng) => {
+    setOrigin(position)
+    setResult(null)
+    setError(null)
+  }
+
+  const changeDestination = (position: LatLng) => {
+    setDestination(position)
+    setResult(null)
+    setError(null)
+  }
 
   const handleCalculate = async () => {
     if (origin === null || destination === null) return
@@ -56,16 +64,16 @@ function App() {
         loading={loading}
         error={error}
         result={result}
+        graphInfo={graphInfo}
         onCalculate={handleCalculate}
         onClear={handleClear}
       />
       <RouteMap
-        nodes={nodes}
         origin={origin}
         destination={destination}
         response={result}
-        onOriginChange={setOrigin}
-        onDestinationChange={setDestination}
+        onOriginChange={changeOrigin}
+        onDestinationChange={changeDestination}
         onClear={handleClear}
       />
     </div>

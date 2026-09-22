@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -30,9 +31,9 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-// ListarNos trata GET /api/v1/nodes.
-func (ct *RouteController) ListarNos(c *gin.Context) {
-	c.JSON(http.StatusOK, ct.service.ListarNos())
+// Info trata GET /api/v1/info.
+func (ct *RouteController) Info(c *gin.Context) {
+	c.JSON(http.StatusOK, ct.service.Info())
 }
 
 // CalcularRota trata POST /api/v1/route.
@@ -45,7 +46,8 @@ func (ct *RouteController) CalcularRota(c *gin.Context) {
 
 	resp, err := ct.service.CalcularRota(req)
 	if err != nil {
-		if httpErr, ok := err.(erroRequisicao); ok {
+		var httpErr erroRequisicao
+		if errors.As(err, &httpErr) {
 			c.JSON(httpErr.codigo, gin.H{"error": httpErr.mensagem})
 			return
 		}

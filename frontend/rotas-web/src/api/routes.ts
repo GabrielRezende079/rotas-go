@@ -1,4 +1,4 @@
-import type { GraphNode, RouteRequest, RouteResponse } from '../types'
+import type { GraphInfo, RouteRequest, RouteResponse } from '../types'
 
 const BASE_URL = '/api/v1'
 
@@ -24,14 +24,9 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return data as T
 }
 
-export async function getNodes(): Promise<GraphNode[]> {
-  let response: Response
-  try {
-    response = await fetch(`${BASE_URL}/nodes`)
-  } catch {
-    throw new Error('Não foi possível conectar ao servidor. Verifique se o backend está rodando.')
-  }
-  return handleResponse<GraphNode[]>(response)
+export async function getGraphInfo(): Promise<GraphInfo> {
+  const response = await fetch(`${BASE_URL}/info`)
+  return handleResponse<GraphInfo>(response)
 }
 
 export async function calculateRoute(req: RouteRequest): Promise<RouteResponse> {

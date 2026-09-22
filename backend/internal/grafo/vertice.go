@@ -1,9 +1,8 @@
 package grafo
 
-// Vertice representa um município (nó) do mapa.
+// Vertice representa um nó geográfico do grafo viário.
 type Vertice struct {
-	ID   string
-	Nome string
-	Lat  float64
-	Lng  float64
+	ID  int64
+	Lat float64
+	Lng float64
 }

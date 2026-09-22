@@ -1,0 +1,5 @@
+.DS_Store
+data/*.osm.pbf
+data/*.graph.gz
+data/*.tmp
+!data/README.md
