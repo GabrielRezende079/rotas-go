@@ -10,10 +10,11 @@ import {
   Marker,
   Polyline,
   TileLayer,
+  Tooltip,
   useMap,
   useMapEvents,
 } from 'react-leaflet'
-import type { LatLng, RouteResponse, VehicleRoute } from '../types'
+import type { Base, LatLng, RouteResponse, VehicleRoute } from '../types'
 import type { AltState } from './AltStepper'
 
 L.Icon.Default.mergeOptions({
@@ -49,6 +50,16 @@ function iconoNumerado(numero: number, cor: string) {
   })
 }
 
+// iconoBase cria o marcador das bases (localizações padrão).
+function iconoBase() {
+  return L.divIcon({
+    className: 'base-marker',
+    html: '<div class="base-marker-icon">B</div>',
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  })
+}
+
 function corDoPonto(index: number, total: number): string {
   if (index === 0) return COR_ORIGEM
   if (index === total - 1) return COR_DESTINO
@@ -62,6 +73,8 @@ interface MapClickHandlerProps {
 function MapClickHandler({ onMapClick }: MapClickHandlerProps) {
   useMapEvents({
     click: (event) => {
+      const alvo = event.originalEvent.target as HTMLElement | null
+      if (alvo?.closest('.base-marker') != null) return
       onMapClick({ lat: event.latlng.lat, lng: event.latlng.lng })
     },
   })
@@ -90,9 +103,11 @@ interface RouteMapProps {
   results: Record<string, RouteResponse> | null
   alt: AltState
   altVehicleId: string | null
+  bases: Base[]
   onMapClick: (position: LatLng) => void
   onPointDrag: (vehicleId: string, index: number, position: LatLng) => void
   onSelectAlternative: (step: number, alternativeIndex: number) => void
+  onSelectBase: (base: Base) => void
 }
 
 function RouteMap({
@@ -101,9 +116,11 @@ function RouteMap({
   results,
   alt,
   altVehicleId,
+  bases,
   onMapClick,
   onPointDrag,
   onSelectAlternative,
+  onSelectBase,
 }: RouteMapProps) {
   const ativo = vehicles.find((v) => v.id === activeVehicleId) ?? null
 
@@ -222,6 +239,21 @@ function RouteMap({
                 />
               )
             })}
+        {bases.map((base) => (
+          <Marker
+            key={`base-${base.id}`}
+            position={[base.lat, base.lng]}
+            icon={iconoBase()}
+            eventHandlers={{
+              click: () => onSelectBase(base),
+            }}
+          >
+            <Tooltip>
+              <strong>{base.name}</strong>
+              <span> clicar adiciona como ponto da rota</span>
+            </Tooltip>
+          </Marker>
+        ))}
         {ativo?.points.map((point, index) => (
           <Marker
             key={`${ativo.id}-${index}`}

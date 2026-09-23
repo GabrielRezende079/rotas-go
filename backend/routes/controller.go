@@ -136,6 +136,45 @@ func (ct *RouteController) ExcluirRotaSalva(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// CriarBase trata POST /api/v1/bases.
+func (ct *RouteController) CriarBase(c *gin.Context) {
+	var req CriarBaseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "corpo da requisição inválido"})
+		return
+	}
+	resp, err := ct.service.CriarBase(c.Request.Context(), req)
+	if err != nil {
+		responderErro(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, resp)
+}
+
+// ListarBases trata GET /api/v1/bases.
+func (ct *RouteController) ListarBases(c *gin.Context) {
+	resp, err := ct.service.ListarBases(c.Request.Context())
+	if err != nil {
+		responderErro(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, BasesResponse{Bases: resp})
+}
+
+// ExcluirBase trata DELETE /api/v1/bases/:id.
+func (ct *RouteController) ExcluirBase(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id inválido"})
+		return
+	}
+	if err := ct.service.ExcluirBase(c.Request.Context(), id); err != nil {
+		responderErro(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func responderErro(c *gin.Context, err error) {
 	var httpErr erroRequisicao
 	if errors.As(err, &httpErr) {

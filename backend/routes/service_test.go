@@ -155,6 +155,9 @@ func TestSalvarRotaUsaStoreFornecido(t *testing.T) {
 type storeFake struct {
 	ultimoNome      string
 	ultimoAlgoritmo string
+	bases           []storage.Base
+	proximaBaseID   int64
+	baseInexistente bool
 }
 
 func (f *storeFake) Salvar(_ context.Context, nome, algoritmo string, veiculos int, distanciaKm, duracaoMin float64, _ []byte) (storage.RotaSalva, error) {
@@ -175,6 +178,27 @@ func (f *storeFake) Buscar(_ context.Context, _ int64) (storage.RotaSalva, error
 }
 
 func (f *storeFake) Excluir(_ context.Context, _ int64) error { return nil }
+
+func (f *storeFake) CriarBase(_ context.Context, nome string, lat, lng float64) (storage.Base, error) {
+	f.proximaBaseID++
+	b := storage.Base{
+		ID: f.proximaBaseID, Nome: nome, Lat: lat, Lng: lng,
+		CriadaEm: time.Unix(1, 0).UTC(),
+	}
+	f.bases = append(f.bases, b)
+	return b, nil
+}
+
+func (f *storeFake) ListarBases(_ context.Context) ([]storage.Base, error) {
+	return f.bases, nil
+}
+
+func (f *storeFake) ExcluirBase(_ context.Context, id int64) error {
+	if f.baseInexistente {
+		return storage.ErrBaseNaoEncontrada
+	}
+	return nil
+}
 
 func grafoComAlternativas() *grafo.Grafo {
 	g := grafo.NovoGrafo()
@@ -257,5 +281,66 @@ func TestCalcularAlternativasComWaypointsResolveTodosOsTrechos(t *testing.T) {
 		if len(trecho.Alternativas) == 0 {
 			t.Fatalf("trecho sem alternativas: %+v", trecho)
 		}
+	}
+}
+
+func TestCriarListarExcluirBaseUsaStore(t *testing.T) {
+	store := &storeFake{}
+	service := NewRouteService(grafoDeTeste(), store)
+
+	base, err := service.CriarBase(context.Background(), CriarBaseRequest{
+		Nome: "Depósito Centro",
+		Lat:  -20.3155,
+		Lng:  -40.3128,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.ID == 0 || base.Nome != "Depósito Centro" {
+		t.Fatalf("base criada incorreta: %+v", base)
+	}
+
+	lista, err := service.ListarBases(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lista) != 1 || lista[0].Nome != "Depósito Centro" {
+		t.Fatalf("listagem de bases incorreta: %+v", lista)
+	}
+
+	if err := service.ExcluirBase(context.Background(), base.ID); err != nil {
+		t.Fatalf("excluir base: %v", err)
+	}
+}
+
+func TestCriarBaseValidaNomeECoordenadas(t *testing.T) {
+	casos := []struct {
+		nome   string
+		store  SavedRouteStore
+		req    CriarBaseRequest
+		codigo int
+	}{
+		{nome: "sem store", store: nil, req: CriarBaseRequest{Nome: "B", Lat: -20, Lng: -40}, codigo: http.StatusServiceUnavailable},
+		{nome: "sem nome", store: &storeFake{}, req: CriarBaseRequest{Lat: -20, Lng: -40}, codigo: http.StatusBadRequest},
+		{nome: "latitude inválida", store: &storeFake{}, req: CriarBaseRequest{Nome: "B", Lat: -120, Lng: -40}, codigo: http.StatusBadRequest},
+		{nome: "longitude inválida", store: &storeFake{}, req: CriarBaseRequest{Nome: "B", Lat: -20, Lng: -500}, codigo: http.StatusBadRequest},
+	}
+	for _, caso := range casos {
+		service := NewRouteService(grafoDeTeste(), caso.store)
+		_, err := service.CriarBase(context.Background(), caso.req)
+		var httpErr erroRequisicao
+		if !errors.As(err, &httpErr) || httpErr.codigo != caso.codigo {
+			t.Fatalf("%s: esperava %d, obtido %v", caso.nome, caso.codigo, err)
+		}
+	}
+}
+
+func TestExcluirBaseInexistenteRetorna404(t *testing.T) {
+	store := &storeFake{baseInexistente: true}
+	service := NewRouteService(grafoDeTeste(), store)
+	err := service.ExcluirBase(context.Background(), 99)
+	var httpErr erroRequisicao
+	if !errors.As(err, &httpErr) || httpErr.codigo != http.StatusNotFound {
+		t.Fatalf("esperava 404, obtido %v", err)
 	}
 }

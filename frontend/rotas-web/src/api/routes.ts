@@ -1,6 +1,7 @@
 import type {
   AlternativesRequest,
   AlternativesResponse,
+  Base,
   BatchRouteRequest,
   BatchRouteResponse,
   GraphInfo,
@@ -89,6 +90,32 @@ export async function deleteSavedRoute(id: number): Promise<void> {
   let response: Response
   try {
     response = await fetch(`${BASE_URL}/routes/saved/${id}`, { method: 'DELETE' })
+  } catch {
+    throw new Error('Não foi possível conectar ao servidor. Verifique se o backend está rodando.')
+  }
+  if (!response.ok) {
+    const data = await readJson(response)
+    if (data !== null && typeof data === 'object' && 'error' in data) {
+      throw new Error(String(data.error))
+    }
+    throw new Error(`Erro HTTP ${response.status}`)
+  }
+}
+
+export async function createBase(req: { name: string; lat: number; lng: number }): Promise<Base> {
+  return postJson<Base>('/bases', req)
+}
+
+export async function listBases(): Promise<Base[]> {
+  const response = await fetch(`${BASE_URL}/bases`)
+  const data = await handleResponse<{ bases: Base[] }>(response)
+  return data.bases
+}
+
+export async function deleteBase(id: number): Promise<void> {
+  let response: Response
+  try {
+    response = await fetch(`${BASE_URL}/bases/${id}`, { method: 'DELETE' })
   } catch {
     throw new Error('Não foi possível conectar ao servidor. Verifique se o backend está rodando.')
   }

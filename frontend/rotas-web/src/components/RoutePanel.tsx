@@ -1,5 +1,6 @@
 import type {
   Algorithm,
+  Base,
   Cost,
   GraphInfo,
   RouteResponse,
@@ -40,6 +41,14 @@ interface RoutePanelProps {
   onSelectAlternative: (step: number, alternativeIndex: number) => void
   onApplyAlternatives: () => void
   onCancelAlternatives: () => void
+  bases: Base[]
+  addingBase: boolean
+  baseName: string
+  onBaseNameChange: (name: string) => void
+  onStartAddBase: () => void
+  onCancelAddBase: () => void
+  onSelectBase: (base: Base) => void
+  onDeleteBase: (id: number) => void
 }
 
 function nomeDoPonto(index: number, total: number): string {
@@ -80,6 +89,14 @@ function RoutePanel({
   onSelectAlternative,
   onApplyAlternatives,
   onCancelAlternatives,
+  bases,
+  addingBase,
+  baseName,
+  onBaseNameChange,
+  onStartAddBase,
+  onCancelAddBase,
+  onSelectBase,
+  onDeleteBase,
 }: RoutePanelProps) {
   const ativo = vehicles.find((v) => v.id === activeVehicleId) ?? null
   const resultadoAtivo =
@@ -285,6 +302,67 @@ function RoutePanel({
           )}
         </section>
       )}
+
+      <section className="bases-section">
+        <div className="section-title">
+          <label>Bases</label>
+          <button
+            type="button"
+            className="button button-small button-secondary"
+            onClick={onStartAddBase}
+            disabled={addingBase}
+          >
+            + Adicionar
+          </button>
+        </div>
+        {addingBase ? (
+          <div className="base-form">
+            <input
+              type="text"
+              placeholder="Nome da base (ex.: Depósito Centro)"
+              value={baseName}
+              autoFocus
+              onChange={(event) => onBaseNameChange(event.target.value)}
+            />
+            <p className="hint">Depois de dar o nome, clique no mapa para posicionar a base.</p>
+            <button type="button" className="button button-small button-secondary" onClick={onCancelAddBase}>
+              Cancelar
+            </button>
+          </div>
+        ) : bases.length === 0 ? (
+          <p className="hint">Nenhuma base cadastrada.</p>
+        ) : (
+          <ul className="bases-list">
+            {bases.map((base) => (
+              <li key={base.id} className="saved-card">
+                <div className="saved-info">
+                  <strong>{base.name}</strong>
+                  <span>
+                    {base.lat.toFixed(4)}, {base.lng.toFixed(4)}
+                  </span>
+                </div>
+                <div className="saved-actions">
+                  <button
+                    type="button"
+                    className="button button-small button-primary"
+                    title="Adiciona a base como próximo ponto do veículo ativo (1º = origem, último = destino)"
+                    onClick={() => onSelectBase(base)}
+                  >
+                    + Rota
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-small button-secondary"
+                    onClick={() => onDeleteBase(base.id)}
+                  >
+                    Excluir
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="saved-section">
         <div className="section-title">

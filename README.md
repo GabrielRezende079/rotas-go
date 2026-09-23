@@ -106,7 +106,16 @@ ROTAS_GRAPH_FILE=/caminho/grafo.gz go run ./cmd
 - `POST /api/v1/routes/saved`: salva um lote de rotas calculado;
 - `GET /api/v1/routes/saved`: lista os resumos das rotas salvas;
 - `GET /api/v1/routes/saved/:id`: busca uma rota salva com o snapshot completo;
-- `DELETE /api/v1/routes/saved/:id`: exclui uma rota salva.
+- `DELETE /api/v1/routes/saved/:id`: exclui uma rota salva;
+- `POST /api/v1/bases`: cria uma base (localização padrão) com `name`, `lat` e
+  `lng`;
+- `GET /api/v1/bases`: lista as bases cadastradas;
+- `DELETE /api/v1/bases/:id`: exclui uma base.
+
+No frontend, as bases aparecem no mapa com o marcador rotulado e podem ser
+usadas como ponto da rota do veículo ativo: clicar na base adiciona o ponto na
+ordem selecionada (o 1º vira origem, o último destino e os do meio são paradas
+intermediárias).
 
 O campo `cost` (opcional) escolhe a métrica a minimizar nas rotas e
 alternativas: `duration` (padrão, tempo estimado em minutos) ou `distance`

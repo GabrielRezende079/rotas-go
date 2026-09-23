@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react'
 import {
   calculateAlternatives,
   calculateBatch,
+  createBase,
+  deleteBase,
   deleteSavedRoute,
   getGraphInfo,
   getSavedRoute,
+  listBases,
   listSavedRoutes,
   saveRoute,
 } from './api/routes'
@@ -13,6 +16,7 @@ import RoutePanel from './components/RoutePanel'
 import type { AltState } from './components/AltStepper'
 import type {
   Algorithm,
+  Base,
   BatchRouteRequest,
   Cost,
   GraphInfo,
@@ -49,10 +53,14 @@ function App() {
   const [saveName, setSaveName] = useState('')
   const [alt, setAlt] = useState<AltState>(alternativasIniciais)
   const [altVehicleId, setAltVehicleId] = useState<string | null>(null)
+  const [bases, setBases] = useState<Base[]>([])
+  const [addingBase, setAddingBase] = useState(false)
+  const [baseName, setBaseName] = useState('')
 
   useEffect(() => {
     getGraphInfo().then(setGraphInfo).catch(() => setGraphInfo(null))
     listSavedRoutes().then(setSavedRoutes).catch(() => setSavedRoutes([]))
+    listBases().then(setBases).catch(() => setBases([]))
   }, [])
 
   const sairDasAlternativas = () => {
@@ -248,6 +256,55 @@ function App() {
     setNotice('Rota montada com as alternativas escolhidas.')
   }
 
+  const startAddBase = () => {
+    setBaseName('')
+    setAddingBase(true)
+  }
+
+  const cancelAddBase = () => {
+    setAddingBase(false)
+    setBaseName('')
+  }
+
+  const handleMapClick = async (position: LatLng) => {
+    if (addingBase) {
+      if (baseName.trim() === '') {
+        setError('Dê um nome à base antes de clicar no mapa.')
+        return
+      }
+      try {
+        const base = await createBase({ name: baseName.trim(), lat: position.lat, lng: position.lng })
+        setBases((prev) => [...prev, base].sort((a, b) => a.name.localeCompare(b.name)))
+        setNotice(`Base "${base.name}" criada.`)
+        cancelAddBase()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao criar a base')
+      }
+      return
+    }
+    addPoint(position)
+  }
+
+  const selectBaseAsPoint = (base: Base) => {
+    if (addingBase) return
+    const ponto: LatLng = { lat: base.lat, lng: base.lng }
+    setVehicles((prev) =>
+      prev.map((v) =>
+        v.id === activeVehicleId ? { ...v, points: [...v.points, ponto] } : v,
+      ),
+    )
+    invalidate()
+  }
+
+  const handleDeleteBase = async (id: number) => {
+    try {
+      await deleteBase(id)
+      setBases((prev) => prev.filter((b) => b.id !== id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao excluir a base')
+    }
+  }
+
   const selecionarVeiculo = (id: string) => {
     if (id !== activeVehicleId) {
       sairDasAlternativas()
@@ -354,6 +411,14 @@ function App() {
         onSelectAlternative={selectAlternative}
         onApplyAlternatives={applyAlternatives}
         onCancelAlternatives={sairDasAlternativas}
+        bases={bases}
+        addingBase={addingBase}
+        baseName={baseName}
+        onBaseNameChange={setBaseName}
+        onStartAddBase={startAddBase}
+        onCancelAddBase={cancelAddBase}
+        onSelectBase={selectBaseAsPoint}
+        onDeleteBase={handleDeleteBase}
       />
       <RouteMap
         vehicles={vehicles}
@@ -361,9 +426,11 @@ function App() {
         results={results}
         alt={alt}
         altVehicleId={altVehicleId}
-        onMapClick={addPoint}
+        bases={bases}
+        onMapClick={handleMapClick}
         onPointDrag={movePoint}
         onSelectAlternative={selectAlternative}
+        onSelectBase={selectBaseAsPoint}
       />
     </div>
   )

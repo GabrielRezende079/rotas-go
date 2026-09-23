@@ -117,3 +117,11 @@ export interface AlternativesResponse {
   cost: Cost
   legs: LegAlternatives[]
 }
+
+export interface Base {
+  id: number
+  name: string
+  lat: number
+  lng: number
+  created_at: string
+}

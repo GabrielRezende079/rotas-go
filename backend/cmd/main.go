@@ -52,6 +52,9 @@ func main() {
 	api.GET("/routes/saved", controller.ListarRotasSalvas)
 	api.GET("/routes/saved/:id", controller.BuscarRotaSalva)
 	api.DELETE("/routes/saved/:id", controller.ExcluirRotaSalva)
+	api.POST("/bases", controller.CriarBase)
+	api.GET("/bases", controller.ListarBases)
+	api.DELETE("/bases/:id", controller.ExcluirBase)
 
 	if err := engine.Run(":" + porta()); err != nil {
 		log.Fatal(err)
