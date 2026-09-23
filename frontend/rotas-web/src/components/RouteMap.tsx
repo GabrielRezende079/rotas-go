@@ -15,7 +15,10 @@ import {
   useMapEvents,
 } from 'react-leaflet'
 import type { Base, LatLng, RouteResponse, VehicleRoute } from '../types'
+import { CORES_VEICULO } from '../colors'
 import type { AltState } from './AltStepper'
+import { Icon } from './Icon'
+import { Spinner } from './Spinner'
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
@@ -23,24 +26,12 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 })
 
-const CORES = [
-  '#2563eb',
-  '#7c3aed',
-  '#059669',
-  '#ea580c',
-  '#0d9488',
-  '#be123c',
-  '#4f46e5',
-  '#ca8a04',
-]
-
 const COR_ORIGEM = '#16a34a'
 const COR_PARADA = '#f59e0b'
 const COR_DESTINO = '#dc2626'
 
 const CORES_OPCOES = ['#2563eb', '#7c3aed', '#059669']
 
-// iconoNumerado cria um marcador circular com o número da parada dentro.
 function iconoNumerado(numero: number, cor: string) {
   return L.divIcon({
     className: '',
@@ -50,7 +41,6 @@ function iconoNumerado(numero: number, cor: string) {
   })
 }
 
-// iconoBase cria o marcador das bases (localizações padrão).
 function iconoBase() {
   return L.divIcon({
     className: 'base-marker',
@@ -75,26 +65,75 @@ function MapClickHandler({ onMapClick }: MapClickHandlerProps) {
     click: (event) => {
       const alvo = event.originalEvent.target as HTMLElement | null
       if (alvo?.closest('.base-marker') != null) return
+      if (alvo?.closest('.map-toolbar') != null) return
       onMapClick({ lat: event.latlng.lat, lng: event.latlng.lng })
     },
   })
   return null
 }
 
+function coordenadasParaFit(geometries: LatLng[][]): [number, number][] {
+  const pontos: [number, number][] = []
+  for (const geometry of geometries) {
+    for (const ponto of geometry) {
+      pontos.push([ponto.lat, ponto.lng])
+    }
+  }
+  return pontos
+}
+
 function FitRoute({ geometries }: { geometries: LatLng[][] }) {
   const map = useMap()
   useEffect(() => {
-    const pontos: [number, number][] = []
-    for (const geometry of geometries) {
-      for (const ponto of geometry) {
-        pontos.push([ponto.lat, ponto.lng])
-      }
-    }
+    const pontos = coordenadasParaFit(geometries)
     if (pontos.length > 1) {
       map.fitBounds(pontos, { padding: [32, 32] })
     }
   }, [geometries, map])
   return null
+}
+
+interface MapToolbarProps {
+  geometrias: LatLng[][]
+  temResultado: boolean
+  onClear: () => void
+}
+
+function MapToolbar({ geometrias, temResultado, onClear }: MapToolbarProps) {
+  const map = useMap()
+  const fitRota = () => {
+    const pontos = coordenadasParaFit(geometrias)
+    if (pontos.length > 1) {
+      map.fitBounds(pontos, { padding: [32, 32] })
+    } else if (pontos.length === 1) {
+      map.setView(pontos[0], 13)
+    }
+  }
+  const recentrar = () => map.setView([-19.6, -40.65], 8)
+  return (
+    <div className="map-toolbar">
+      <button
+        type="button"
+        className="map-tool"
+        title="Enquadrar a rota"
+        onClick={fitRota}
+        disabled={!temResultado}
+      >
+        <Icon name="fit" size={16} />
+      </button>
+      <button
+        type="button"
+        className="map-tool"
+        title="Recentrar no Espírito Santo"
+        onClick={recentrar}
+      >
+        <Icon name="map" size={16} />
+      </button>
+      <button type="button" className="map-tool" title="Limpar tudo" onClick={onClear}>
+        <Icon name="clear" size={16} />
+      </button>
+    </div>
+  )
 }
 
 interface RouteMapProps {
@@ -104,10 +143,15 @@ interface RouteMapProps {
   alt: AltState
   altVehicleId: string | null
   bases: Base[]
+  loading: boolean
+  addingBase: boolean
+  baseName: string
   onMapClick: (position: LatLng) => void
   onPointDrag: (vehicleId: string, index: number, position: LatLng) => void
   onSelectAlternative: (step: number, alternativeIndex: number) => void
   onSelectBase: (base: Base) => void
+  onClear: () => void
+  onCancelAddBase: () => void
 }
 
 function RouteMap({
@@ -117,10 +161,15 @@ function RouteMap({
   alt,
   altVehicleId,
   bases,
+  loading,
+  addingBase,
+  baseName,
   onMapClick,
   onPointDrag,
   onSelectAlternative,
   onSelectBase,
+  onClear,
+  onCancelAddBase,
 }: RouteMapProps) {
   const ativo = vehicles.find((v) => v.id === activeVehicleId) ?? null
 
@@ -162,7 +211,7 @@ function RouteMap({
               key={`alt-${legIndex}-escolhida`}
               positions={alternativa.geometry.map((point) => [point.lat, point.lng])}
               pathOptions={{
-                color: CORES[legIndex % CORES.length],
+                color: CORES_VEICULO[legIndex % CORES_VEICULO.length],
                 weight: 5,
                 opacity: 0.95,
               }}
@@ -210,13 +259,18 @@ function RouteMap({
   })()
 
   return (
-    <div className="map-container">
+    <div className={`map-container${addingBase ? ' map-container-adding-base' : ''}`}>
       <MapContainer center={[-19.6, -40.65]} zoom={8}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapClickHandler onMapClick={onMapClick} />
+        <MapToolbar
+          geometrias={geometriasParaFocus}
+          temResultado={results !== null}
+          onClear={onClear}
+        />
         {polilinhasAlternativas !== null
           ? polilinhasAlternativas
           : vehicles.map((vehicle, vehicleIndex) => {
@@ -227,7 +281,10 @@ function RouteMap({
                   <Polyline
                     key={`${vehicle.id}-leg-${legIndex}`}
                     positions={leg.geometry.map((point) => [point.lat, point.lng])}
-                    pathOptions={{ color: CORES[(vehicleIndex + legIndex) % CORES.length], weight: 5 }}
+                    pathOptions={{
+                      color: CORES_VEICULO[(vehicleIndex + legIndex) % CORES_VEICULO.length],
+                      weight: 5,
+                    }}
                   />
                 ))
               }
@@ -235,7 +292,7 @@ function RouteMap({
                 <Polyline
                   key={`${vehicle.id}-route`}
                   positions={resultado.geometry.map((point) => [point.lat, point.lng])}
-                  pathOptions={{ color: CORES[vehicleIndex % CORES.length], weight: 5 }}
+                  pathOptions={{ color: CORES_VEICULO[vehicleIndex % CORES_VEICULO.length], weight: 5 }}
                 />
               )
             })}
@@ -259,7 +316,7 @@ function RouteMap({
             key={`${ativo.id}-${index}`}
             position={[point.lat, point.lng]}
             icon={iconoNumerado(index + 1, corDoPonto(index, ativo.points.length))}
-            draggable
+            draggable={!addingBase}
             eventHandlers={{
               dragend: (event) => {
                 const position = event.target.getLatLng()
@@ -270,6 +327,42 @@ function RouteMap({
         ))}
         <FitRoute geometries={geometriasParaFocus} />
       </MapContainer>
+
+      {loading && (
+        <div className="map-pill">
+          <Spinner size={14} /> Calculando…
+        </div>
+      )}
+      {addingBase && (
+        <div className="map-banner">
+          <Icon name="base" size={15} />
+          <span>
+            Clique no mapa para posicionar <strong>{baseName}</strong>
+          </span>
+          <button
+            type="button"
+            className="map-banner-cancel"
+            onClick={onCancelAddBase}
+            aria-label="Cancelar posicionamento da base"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+      <div className="map-legend">
+        <span>
+          <i className="legend-dot" style={{ backgroundColor: COR_ORIGEM }} /> Origem
+        </span>
+        <span>
+          <i className="legend-dot" style={{ backgroundColor: COR_PARADA }} /> Parada
+        </span>
+        <span>
+          <i className="legend-dot" style={{ backgroundColor: COR_DESTINO }} /> Destino
+        </span>
+        <span>
+          <i className="legend-dot legend-dot-base" /> Base
+        </span>
+      </div>
     </div>
   )
 }

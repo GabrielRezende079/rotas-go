@@ -1,189 +1,134 @@
-import { useState } from 'react'
-import type { FormEvent } from 'react'
-import {
-  CATEGORIAS_VEICULO,
-  STATUS_VEICULO,
-  type CategoriaVeiculo,
-  type NovoVeiculo,
-  type StatusVeiculo,
-  type Veiculo,
-} from '../types'
+import { useMemo, useState } from 'react'
+import type { StatusVeiculo, Veiculo } from '../types'
+import { Icon } from './Icon'
 
 interface VehiclesViewProps {
   veiculos: Veiculo[]
-  onCadastrar: (req: NovoVeiculo) => Promise<void>
-  onExcluir: (id: number) => Promise<void>
+  onNovoVeiculo: () => void
+  onExcluir: (veiculo: Veiculo) => void
 }
 
-const FORM_INICIAL: NovoVeiculo = {
-  modelo: '',
-  categoria: 'Carro',
-  placa: '',
-  status: 'Disponível',
-  kilometragem: 0,
-  velocidade: 0,
+interface Kpi {
+  chave: StatusVeiculo | 'total'
+  rotulo: string
+  contagem: number
+  sufixo: string
 }
 
 function formatarNumero(valor: number): string {
   return valor.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
 }
 
-function VehiclesView({ veiculos, onCadastrar, onExcluir }: VehiclesViewProps) {
-  const [form, setForm] = useState<NovoVeiculo>(FORM_INICIAL)
-  const [salvando, setSalvando] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+function VehiclesView({ veiculos, onNovoVeiculo, onExcluir }: VehiclesViewProps) {
+  const [busca, setBusca] = useState('')
+  const [filtro, setFiltro] = useState<StatusVeiculo | null>(null)
 
-  const atualizar = (campo: keyof NovoVeiculo, valor: string | number) => {
-    setForm((prev) => ({ ...prev, [campo]: valor }))
+  const kpis: Kpi[] = useMemo(() => {
+    const contar = (status: StatusVeiculo) => veiculos.filter((v) => v.status === status).length
+    return [
+      { chave: 'total', rotulo: 'Total', contagem: veiculos.length, sufixo: 'veículos' },
+      { chave: 'Disponível', rotulo: 'Disponíveis', contagem: contar('Disponível'), sufixo: 'prontos' },
+      { chave: 'Em uso', rotulo: 'Em uso', contagem: contar('Em uso'), sufixo: 'na rota' },
+      { chave: 'Em Manutenção', rotulo: 'Manutenção', contagem: contar('Em Manutenção'), sufixo: 'na oficina' },
+      { chave: 'Indisponível', rotulo: 'Indisponíveis', contagem: contar('Indisponível'), sufixo: 'fora' },
+    ]
+  }, [veiculos])
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase()
+    return veiculos.filter((veiculo) => {
+      if (filtro !== null && veiculo.status !== filtro) return false
+      if (termo === '') return true
+      return (
+        veiculo.modelo.toLowerCase().includes(termo) ||
+        veiculo.placa.toLowerCase().includes(termo) ||
+        veiculo.categoria.toLowerCase().includes(termo)
+      )
+    })
+  }, [veiculos, busca, filtro])
+
+  const alternarFiltro = (chave: StatusVeiculo | 'total') => {
+    setFiltro((prev) => (prev === chave || chave === 'total' ? null : chave))
   }
-
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault()
-    setError(null)
-    setNotice(null)
-    setSalvando(true)
-    try {
-      await onCadastrar({
-        ...form,
-        modelo: form.modelo.trim(),
-        placa: form.placa.trim().toUpperCase(),
-        kilometragem: Number(form.kilometragem),
-        velocidade: Number(form.velocidade),
-      })
-      setForm(FORM_INICIAL)
-      setNotice('Veículo cadastrado com sucesso.')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao cadastrar o veículo')
-    } finally {
-      setSalvando(false)
-    }
-  }
-
-  const handleExcluir = async (veiculo: Veiculo) => {
-    if (!window.confirm(`Excluir o veículo ${veiculo.modelo} (${veiculo.placa})?`)) return
-    setError(null)
-    setNotice(null)
-    try {
-      await onExcluir(veiculo.id)
-      setNotice('Veículo excluído.')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao excluir o veículo')
-    }
-  }
-
-  const podeCadastrar = form.modelo.trim() !== '' && form.placa.trim() !== ''
 
   return (
-    <div className="vehicles-view">
-      <aside className="vehicles-sidebar">
-        <header className="sidebar-header">
+    <main className="vehicles-view">
+      <header className="vehicles-header">
+        <div>
           <h1>Frota de veículos</h1>
           <p>Cadastro e consulta dos veículos da empresa, persistidos no banco de dados.</p>
-        </header>
-
-        <form className="vehicles-form" onSubmit={handleSubmit}>
-          <div className="field">
-            <label htmlFor="veh-modelo">Modelo</label>
-            <input
-              id="veh-modelo"
-              type="text"
-              placeholder="Ex.: Fiorino 2021"
-              value={form.modelo}
-              onChange={(event) => atualizar('modelo', event.target.value)}
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor="veh-categoria">Categoria</label>
-            <select
-              id="veh-categoria"
-              value={form.categoria}
-              onChange={(event) =>
-                atualizar('categoria', event.target.value as CategoriaVeiculo)
-              }
-            >
-              {CATEGORIAS_VEICULO.map((categoria) => (
-                <option key={categoria} value={categoria}>
-                  {categoria}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="field">
-            <label htmlFor="veh-placa">Placa</label>
-            <input
-              id="veh-placa"
-              type="text"
-              placeholder="ABC1D23 ou ABC-1234"
-              value={form.placa}
-              onChange={(event) => atualizar('placa', event.target.value.toUpperCase())}
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor="veh-status">Status</label>
-            <select
-              id="veh-status"
-              value={form.status}
-              onChange={(event) => atualizar('status', event.target.value as StatusVeiculo)}
-            >
-              {STATUS_VEICULO.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="vehicles-form-grid">
-            <div className="field">
-              <label htmlFor="veh-km">Kilometragem (km)</label>
-              <input
-                id="veh-km"
-                type="number"
-                min={0}
-                step="0.1"
-                value={form.kilometragem}
-                onChange={(event) => atualizar('kilometragem', event.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="veh-vel">Velocidade (km/h)</label>
-              <input
-                id="veh-vel"
-                type="number"
-                min={0}
-                step="1"
-                value={form.velocidade}
-                onChange={(event) => atualizar('velocidade', event.target.value)}
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="button button-primary"
-            disabled={salvando || !podeCadastrar}
-          >
-            {salvando ? 'Cadastrando…' : 'Cadastrar veículo'}
-          </button>
-        </form>
-
-        {error !== null && <div className="error-box">{error}</div>}
-        {notice !== null && <div className="notice-box">{notice}</div>}
-      </aside>
-
-      <main className="vehicles-list">
-        <div className="section-title">
-          <label>
-            Frota cadastrada ({veiculos.length} {veiculos.length === 1 ? 'veículo' : 'veículos'})
-          </label>
         </div>
-        {veiculos.length === 0 ? (
-          <p className="hint">Nenhum veículo cadastrado ainda. Use o formulário ao lado.</p>
-        ) : (
+        <button type="button" className="button button-primary" onClick={onNovoVeiculo}>
+          <Icon name="plus" size={15} /> Novo veículo
+        </button>
+      </header>
+
+      <div className="kpi-grid">
+        {kpis.map((kpi) => (
+          <button
+            key={kpi.chave}
+            type="button"
+            className={`kpi-card ${filtro === kpi.chave ? 'kpi-card-active' : ''}`}
+            onClick={() => alternarFiltro(kpi.chave)}
+          >
+            <span className="kpi-valor">{kpi.contagem}</span>
+            <span className="kpi-rotulo">{kpi.rotulo}</span>
+            <span className="kpi-sufixo">{kpi.sufixo}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="vehicles-toolbar">
+        <div className="search-box">
+          <Icon name="search" size={15} />
+          <input
+            type="text"
+            placeholder="Buscar por modelo, placa ou categoria…"
+            value={busca}
+            onChange={(event) => setBusca(event.target.value)}
+          />
+          {busca !== '' && (
+            <button
+              type="button"
+              className="search-clear"
+              onClick={() => setBusca('')}
+              aria-label="Limpar busca"
+            >
+              <Icon name="close" size={13} />
+            </button>
+          )}
+        </div>
+        <span className="vehicles-count">
+          {filtrados.length} {filtrados.length === 1 ? 'veículo' : 'veículos'}
+          {filtro !== null && ` · ${filtro}`}
+        </span>
+      </div>
+
+      {veiculos.length === 0 ? (
+        <div className="vehicles-empty">
+          <Icon name="truck" size={28} />
+          <p>Nenhum veículo cadastrado ainda.</p>
+          <button type="button" className="button button-primary" onClick={onNovoVeiculo}>
+            Cadastrar o primeiro veículo
+          </button>
+        </div>
+      ) : filtrados.length === 0 ? (
+        <div className="vehicles-empty">
+          <Icon name="search" size={28} />
+          <p>Nenhum veículo corresponde à busca atual.</p>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              setBusca('')
+              setFiltro(null)
+            }}
+          >
+            Limpar filtros
+          </button>
+        </div>
+      ) : (
+        <div className="vehicles-table-wrap">
           <table className="vehicles-table">
             <thead>
               <tr>
@@ -191,16 +136,16 @@ function VehiclesView({ veiculos, onCadastrar, onExcluir }: VehiclesViewProps) {
                 <th>Categoria</th>
                 <th>Placa</th>
                 <th>Status</th>
-                <th>Kilometragem</th>
-                <th>Velocidade</th>
+                <th className="num">Kilometragem</th>
+                <th className="num">Velocidade</th>
                 <th>Cadastrado</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {veiculos.map((veiculo) => (
+              {filtrados.map((veiculo) => (
                 <tr key={veiculo.id}>
-                  <td>{veiculo.modelo}</td>
+                  <td className="veiculo-modelo">{veiculo.modelo}</td>
                   <td>{veiculo.categoria}</td>
                   <td className="veiculo-placa">{veiculo.placa}</td>
                   <td>
@@ -208,25 +153,28 @@ function VehiclesView({ veiculos, onCadastrar, onExcluir }: VehiclesViewProps) {
                       {veiculo.status}
                     </span>
                   </td>
-                  <td>{formatarNumero(veiculo.kilometragem)} km</td>
-                  <td>{formatarNumero(veiculo.velocidade)} km/h</td>
-                  <td className="veiculo-data">{new Date(veiculo.created_at).toLocaleDateString('pt-BR')}</td>
+                  <td className="num">{formatarNumero(veiculo.kilometragem)} km</td>
+                  <td className="num">{formatarNumero(veiculo.velocidade)} km/h</td>
+                  <td className="veiculo-data">
+                    {new Date(veiculo.created_at).toLocaleDateString('pt-BR')}
+                  </td>
                   <td>
                     <button
                       type="button"
-                      className="button button-small button-secondary"
-                      onClick={() => handleExcluir(veiculo)}
+                      className="icon-button"
+                      title="Excluir veículo"
+                      onClick={() => onExcluir(veiculo)}
                     >
-                      Excluir
+                      <Icon name="trash" size={15} />
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </main>
-    </div>
+        </div>
+      )}
+    </main>
   )
 }
 

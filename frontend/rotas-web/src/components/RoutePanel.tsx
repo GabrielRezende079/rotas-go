@@ -7,6 +7,7 @@ import type {
   SavedRouteSummary,
   VehicleRoute,
 } from '../types'
+import { CORES_VEICULO } from '../colors'
 import AltStepper, { type AltState } from './AltStepper'
 
 interface RoutePanelProps {
@@ -17,44 +18,34 @@ interface RoutePanelProps {
   vehicles: VehicleRoute[]
   activeVehicleId: string | null
   results: Record<string, RouteResponse> | null
-  loading: boolean
-  saving: boolean
-  error: string | null
-  notice: string | null
-  canCalculate: boolean
   graphInfo: GraphInfo | null
   savedRoutes: SavedRouteSummary[]
-  saveName: string
-  onSaveNameChange: (name: string) => void
+  alt: AltState
   onSelectVehicle: (id: string) => void
   onAddVehicle: () => void
   onRemoveVehicle: (id: string) => void
   onUpdateLabel: (id: string, label: string) => void
   onRemovePoint: (vehicleId: string, index: number) => void
-  onCalculate: () => void
-  onAlternatives: () => void
-  onClear: () => void
-  onSave: () => void
-  onLoadSaved: (id: number) => void
-  onDeleteSaved: (id: number) => void
-  alt: AltState
   onSelectAlternative: (step: number, alternativeIndex: number) => void
   onApplyAlternatives: () => void
   onCancelAlternatives: () => void
+  onLoadSaved: (id: number) => void
+  onDeleteSaved: (saved: SavedRouteSummary) => void
   bases: Base[]
   addingBase: boolean
-  baseName: string
-  onBaseNameChange: (name: string) => void
   onStartAddBase: () => void
-  onCancelAddBase: () => void
   onSelectBase: (base: Base) => void
-  onDeleteBase: (id: number) => void
+  onDeleteBase: (base: Base) => void
 }
 
 function nomeDoPonto(index: number, total: number): string {
   if (index === 0) return 'Origem'
   if (index === total - 1) return 'Destino'
   return `Parada ${index}`
+}
+
+function corDoVeiculo(index: number): string {
+  return CORES_VEICULO[index % CORES_VEICULO.length]
 }
 
 function RoutePanel({
@@ -65,343 +56,269 @@ function RoutePanel({
   vehicles,
   activeVehicleId,
   results,
-  loading,
-  saving,
-  error,
-  notice,
-  canCalculate,
   graphInfo,
   savedRoutes,
-  saveName,
-  onSaveNameChange,
+  alt,
   onSelectVehicle,
   onAddVehicle,
   onRemoveVehicle,
   onUpdateLabel,
   onRemovePoint,
-  onCalculate,
-  onAlternatives,
-  onClear,
-  onSave,
-  onLoadSaved,
-  onDeleteSaved,
-  alt,
   onSelectAlternative,
   onApplyAlternatives,
   onCancelAlternatives,
+  onLoadSaved,
+  onDeleteSaved,
   bases,
   addingBase,
-  baseName,
-  onBaseNameChange,
   onStartAddBase,
-  onCancelAddBase,
   onSelectBase,
   onDeleteBase,
 }: RoutePanelProps) {
   const ativo = vehicles.find((v) => v.id === activeVehicleId) ?? null
-  const resultadoAtivo =
-    results !== null && ativo !== null ? results[ativo.id] ?? null : null
-  const rotasSalvasVisiveis = results !== null
+  const resultados = results !== null ? Object.values(results) : []
+  const totalKm = resultados.reduce((acc, r) => acc + r.distance_km, 0)
+  const totalMin = resultados.reduce((acc, r) => acc + r.estimated_duration_minutes, 0)
 
   return (
     <aside className="sidebar">
-      <header className="sidebar-header">
-        <p>
-          Menor rota na malha viária real do Espírito Santo, calculada pelo nosso próprio Dijkstra
-          ou A*.
-        </p>
-      </header>
+      <div className="sidebar-scroll">
+        {graphInfo !== null && (
+          <div
+            className={
+              graphInfo.real_road_graph ? 'graph-status graph-status-real' : 'graph-status'
+            }
+          >
+            <strong>
+              {graphInfo.real_road_graph ? 'Malha OSM real carregada' : 'Modo didático'}
+            </strong>
+            <span>
+              {graphInfo.vertices.toLocaleString('pt-BR')} vértices ·{' '}
+              {graphInfo.edges.toLocaleString('pt-BR')} arestas
+            </span>
+          </div>
+        )}
 
-      {graphInfo !== null && (
-        <div className={graphInfo.real_road_graph ? 'graph-status graph-status-real' : 'graph-status'}>
-          <strong>{graphInfo.real_road_graph ? 'Malha OSM real carregada' : 'Modo didático'}</strong>
-          <span>
-            {graphInfo.vertices.toLocaleString('pt-BR')} vértices ·{' '}
-            {graphInfo.edges.toLocaleString('pt-BR')} arestas
-          </span>
-        </div>
-      )}
-
-      <div className="field">
-        <label htmlFor="algorithm">Algoritmo</label>
-        <select
-          id="algorithm"
-          value={algorithm}
-          onChange={(event) => onAlgorithmChange(event.target.value as Algorithm)}
-        >
-          <option value="dijkstra">Dijkstra</option>
-          <option value="astar">A*</option>
-        </select>
-      </div>
-
-      <div className="field">
-        <label htmlFor="cost">Custo a minimizar</label>
-        <select
-          id="cost"
-          value={cost}
-          onChange={(event) => onCostChange(event.target.value as Cost)}
-        >
-          <option value="duration">Duração estimada</option>
-          <option value="distance">Distância</option>
-        </select>
-      </div>
-
-      <section className="vehicles-section">
-        <div className="section-title">
-          <label>Veículos</label>
-          <button type="button" className="button button-small button-secondary" onClick={onAddVehicle}>
-            + Adicionar
-          </button>
-        </div>
-        <ul className="vehicle-list">
-          {vehicles.map((vehicle) => (
-            <li
-              key={vehicle.id}
-              className={`vehicle-card ${vehicle.id === activeVehicleId ? 'vehicle-card-active' : ''}`}
-              onClick={() => onSelectVehicle(vehicle.id)}
+        <div className="field-grid-2">
+          <div className="field">
+            <label htmlFor="algorithm">Algoritmo</label>
+            <select
+              id="algorithm"
+              value={algorithm}
+              onChange={(event) => onAlgorithmChange(event.target.value as Algorithm)}
             >
-              <input
-                type="text"
-                value={vehicle.label}
-                className="vehicle-label"
-                onClick={(event) => event.stopPropagation()}
-                onChange={(event) => onUpdateLabel(vehicle.id, event.target.value)}
-              />
-              <span className="vehicle-count">
-                {vehicle.points.length} {vehicle.points.length === 1 ? 'ponto' : 'pontos'}
-              </span>
-              <button
-                type="button"
-                className="icon-button"
-                title="Remover veículo"
-                disabled={vehicles.length <= 1}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onRemoveVehicle(vehicle.id)
-                }}
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+              <option value="dijkstra">Dijkstra</option>
+              <option value="astar">A*</option>
+            </select>
+          </div>
 
-      <section className="points-section">
-        <div className="section-title">
-          <label>Pontos do veículo ativo</label>
+          <div className="field">
+            <label htmlFor="cost">Custo a minimizar</label>
+            <select
+              id="cost"
+              value={cost}
+              onChange={(event) => onCostChange(event.target.value as Cost)}
+            >
+              <option value="duration">Duração</option>
+              <option value="distance">Distância</option>
+            </select>
+          </div>
         </div>
-        {ativo === null ? (
-          <p className="hint">Adicione um veículo para começar.</p>
-        ) : (
-          <>
-            <p className="hint">
-              Clique no mapa para adicionar pontos: o 1º é a origem, o último é o destino e os
-              demais são paradas intermediárias.
-            </p>
-            <ul className="point-list">
-              {ativo.points.map((point, index) => (
-                <li key={`${index}-${point.lat}-${point.lng}`} className="point-row">
-                  <span className="point-name">{nomeDoPonto(index, ativo.points.length)}</span>
-                  <span className="point-coords">
-                    {point.lat.toFixed(4)}, {point.lng.toFixed(4)}
-                  </span>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    title="Remover ponto"
-                    onClick={() => onRemovePoint(ativo.id, index)}
-                  >
-                    ×
-                  </button>
+
+        <section className="vehicles-section">
+          <div className="section-title">
+            <label>Veículos</label>
+            <button type="button" className="button button-small button-secondary" onClick={onAddVehicle}>
+              <span className="button-plus">+</span> Adicionar
+            </button>
+          </div>
+          <ul className="vehicle-list">
+            {vehicles.map((vehicle, index) => (
+              <li
+                key={vehicle.id}
+                className={`vehicle-card ${
+                  vehicle.id === activeVehicleId ? 'vehicle-card-active' : ''
+                }`}
+                onClick={() => onSelectVehicle(vehicle.id)}
+              >
+                <span className="vehicle-swatch" style={{ backgroundColor: corDoVeiculo(index) }} />
+                <input
+                  type="text"
+                  value={vehicle.label}
+                  className="vehicle-label"
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => onUpdateLabel(vehicle.id, event.target.value)}
+                />
+                <span className="vehicle-count">
+                  {vehicle.points.length} {vehicle.points.length === 1 ? 'ponto' : 'pontos'}
+                </span>
+                <button
+                  type="button"
+                  className="icon-button"
+                  title="Remover veículo"
+                  disabled={vehicles.length <= 1}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onRemoveVehicle(vehicle.id)
+                  }}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="points-section">
+          <div className="section-title">
+            <label>Pontos do veículo ativo</label>
+          </div>
+          {ativo === null ? (
+            <p className="hint">Adicione um veículo para começar.</p>
+          ) : (
+            <>
+              <p className="hint">
+                Clique no mapa para adicionar pontos: o 1º é a origem, o último é o destino e os
+                demais são paradas intermediárias.
+              </p>
+              {ativo.points.length === 0 ? (
+                <p className="hint">Nenhum ponto definido ainda.</p>
+              ) : (
+                <ul className="point-list">
+                  {ativo.points.map((point, index) => (
+                    <li key={`${index}-${point.lat}-${point.lng}`} className="point-row">
+                      <span className="point-name">{nomeDoPonto(index, ativo.points.length)}</span>
+                      <span className="point-coords">
+                        {point.lat.toFixed(4)}, {point.lng.toFixed(4)}
+                      </span>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        title="Remover ponto"
+                        onClick={() => onRemovePoint(ativo.id, index)}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </section>
+
+        <AltStepper
+          alt={alt}
+          cost={cost}
+          onSelectAlternative={onSelectAlternative}
+          onConfirm={onApplyAlternatives}
+          onCancel={onCancelAlternatives}
+        />
+
+        <section className="bases-section">
+          <div className="section-title">
+            <label>Bases</label>
+            <button
+              type="button"
+              className="button button-small button-secondary"
+              onClick={onStartAddBase}
+              disabled={addingBase}
+            >
+              <span className="button-plus">+</span> Adicionar
+            </button>
+          </div>
+          {addingBase ? (
+            <p className="hint">Modo de posicionamento ativo: clique no mapa.</p>
+          ) : bases.length === 0 ? (
+            <p className="hint">Nenhuma base cadastrada.</p>
+          ) : (
+            <ul className="bases-list">
+              {bases.map((base) => (
+                <li key={base.id} className="saved-card">
+                  <div className="saved-info">
+                    <strong>{base.name}</strong>
+                    <span>
+                      {base.lat.toFixed(4)}, {base.lng.toFixed(4)}
+                    </span>
+                  </div>
+                  <div className="saved-actions">
+                    <button
+                      type="button"
+                      className="button button-small button-soft"
+                      title="Adiciona a base como próximo ponto do veículo ativo"
+                      onClick={() => onSelectBase(base)}
+                    >
+                      + Rota
+                    </button>
+                    <button
+                      type="button"
+                      className="button button-small button-secondary"
+                      onClick={() => onDeleteBase(base)}
+                    >
+                      Excluir
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
-          </>
-        )}
-      </section>
-
-      <div className="sidebar-actions">
-        <button
-          type="button"
-          className="button button-primary"
-          onClick={onCalculate}
-          disabled={!canCalculate}
-        >
-          {loading ? 'Calculando…' : 'Calcular rotas'}
-        </button>
-        <button
-          type="button"
-          className="button button-secondary"
-          onClick={onAlternatives}
-          disabled={canCalculate === false || alt.active}
-        >
-          {loading ? 'Calculando…' : 'Alternativas'}
-        </button>
-        <button type="button" className="button button-secondary" onClick={onClear}>
-          Limpar
-        </button>
-      </div>
-
-      {error !== null && <div className="error-box">{error}</div>}
-      {notice !== null && <div className="notice-box">{notice}</div>}
-
-      <AltStepper
-        alt={alt}
-        onSelectAlternative={onSelectAlternative}
-        onConfirm={onApplyAlternatives}
-        onCancel={onCancelAlternatives}
-      />
-
-      {rotasSalvasVisiveis && results !== null && (
-        <section className="save-section">
-          <div className="section-title">
-            <label>Salvar rota</label>
-          </div>
-          <div className="save-form">
-            <input
-              type="text"
-              placeholder="Nome da rota (ex.: entrega norte)"
-              value={saveName}
-              onChange={(event) => onSaveNameChange(event.target.value)}
-            />
-            <button
-              type="button"
-              className="button button-primary"
-              onClick={onSave}
-              disabled={saving || saveName.trim() === ''}
-            >
-              {saving ? 'Salvando…' : 'Salvar'}
-            </button>
-          </div>
-        </section>
-      )}
-
-      {results !== null && (
-        <section className="results-section">
-          <div className="section-title">
-            <label>Resultados</label>
-          </div>
-          {vehicles.map((vehicle) => {
-            const resultado = results[vehicle.id]
-            if (resultado === undefined) return null
-            return (
-              <div key={vehicle.id} className="result-card result-compact">
-                <p className="result-title">{vehicle.label}</p>
-                <p className="result-distance">{resultado.distance_km.toFixed(1)} km</p>
-                <p className="result-meta">
-                  {resultado.estimated_duration_minutes.toFixed(1)} min ·{' '}
-                  {resultado.geometry.length.toLocaleString('pt-BR')} pontos na malha
-                </p>
-              </div>
-            )
-          })}
-          {resultadoAtivo !== null && (
-            <p className="result-source">Fonte: {resultadoAtivo.data_source}</p>
           )}
         </section>
-      )}
 
-      <section className="bases-section">
-        <div className="section-title">
-          <label>Bases</label>
-          <button
-            type="button"
-            className="button button-small button-secondary"
-            onClick={onStartAddBase}
-            disabled={addingBase}
-          >
-            + Adicionar
-          </button>
-        </div>
-        {addingBase ? (
-          <div className="base-form">
-            <input
-              type="text"
-              placeholder="Nome da base (ex.: Depósito Centro)"
-              value={baseName}
-              autoFocus
-              onChange={(event) => onBaseNameChange(event.target.value)}
-            />
-            <p className="hint">Depois de dar o nome, clique no mapa para posicionar a base.</p>
-            <button type="button" className="button button-small button-secondary" onClick={onCancelAddBase}>
-              Cancelar
-            </button>
+        <section className="saved-section">
+          <div className="section-title">
+            <label>Rotas salvas</label>
           </div>
-        ) : bases.length === 0 ? (
-          <p className="hint">Nenhuma base cadastrada.</p>
-        ) : (
-          <ul className="bases-list">
-            {bases.map((base) => (
-              <li key={base.id} className="saved-card">
-                <div className="saved-info">
-                  <strong>{base.name}</strong>
-                  <span>
-                    {base.lat.toFixed(4)}, {base.lng.toFixed(4)}
-                  </span>
-                </div>
-                <div className="saved-actions">
-                  <button
-                    type="button"
-                    className="button button-small button-primary"
-                    title="Adiciona a base como próximo ponto do veículo ativo (1º = origem, último = destino)"
-                    onClick={() => onSelectBase(base)}
-                  >
-                    + Rota
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-small button-secondary"
-                    onClick={() => onDeleteBase(base.id)}
-                  >
-                    Excluir
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          {savedRoutes.length === 0 ? (
+            <p className="hint">Nenhuma rota salva ainda.</p>
+          ) : (
+            <ul className="saved-list">
+              {savedRoutes.map((saved) => (
+                <li key={saved.id} className="saved-card">
+                  <div className="saved-info">
+                    <strong>{saved.name}</strong>
+                    <span>
+                      {saved.vehicle_count} {saved.vehicle_count === 1 ? 'veículo' : 'veículos'} ·{' '}
+                      {saved.total_distance_km.toFixed(1)} km
+                    </span>
+                    <span>{new Date(saved.created_at).toLocaleString('pt-BR')}</span>
+                  </div>
+                  <div className="saved-actions">
+                    <button
+                      type="button"
+                      className="button button-small button-soft"
+                      onClick={() => onLoadSaved(saved.id)}
+                    >
+                      Carregar
+                    </button>
+                    <button
+                      type="button"
+                      className="button button-small button-secondary"
+                      onClick={() => onDeleteSaved(saved)}
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
 
-      <section className="saved-section">
-        <div className="section-title">
-          <label>Rotas salvas</label>
-        </div>
-        {savedRoutes.length === 0 ? (
-          <p className="hint">Nenhuma rota salva ainda.</p>
-        ) : (
-          <ul className="saved-list">
-            {savedRoutes.map((saved) => (
-              <li key={saved.id} className="saved-card">
-                <div className="saved-info">
-                  <strong>{saved.name}</strong>
-                  <span>
-                    {saved.vehicle_count} {saved.vehicle_count === 1 ? 'veículo' : 'veículos'} ·{' '}
-                    {saved.total_distance_km.toFixed(1)} km
-                  </span>
-                  <span>{new Date(saved.created_at).toLocaleString('pt-BR')}</span>
-                </div>
-                <div className="saved-actions">
-                  <button
-                    type="button"
-                    className="button button-small button-primary"
-                    onClick={() => onLoadSaved(saved.id)}
-                  >
-                    Carregar
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-small button-secondary"
-                    onClick={() => onDeleteSaved(saved.id)}
-                  >
-                    Excluir
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <footer className="sidebar-footer">
+        <span className="summary-item">
+          <strong>{resultados.length}</strong>
+          <span>rotas</span>
+        </span>
+        <span className="summary-item">
+          <strong>{totalKm.toFixed(1)}</strong>
+          <span>km</span>
+        </span>
+        <span className="summary-item">
+          <strong>{totalMin.toFixed(1)}</strong>
+          <span>min</span>
+        </span>
+      </footer>
     </aside>
   )
 }

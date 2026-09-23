@@ -1,4 +1,4 @@
-import type { LegAlternatives, RouteAlternative } from '../types'
+import type { Cost, LegAlternatives, RouteAlternative } from '../types'
 
 export interface AltState {
   active: boolean
@@ -10,6 +10,7 @@ export interface AltState {
 
 interface AltStepperProps {
   alt: AltState
+  cost: Cost
   onSelectAlternative: (step: number, alternativeIndex: number) => void
   onConfirm: () => void
   onCancel: () => void
@@ -25,13 +26,13 @@ function nomeDoTrecho(index: number, total: number, legs: LegAlternatives[] | nu
   return `Parada ${index} → Parada ${index + 1}`
 }
 
-function resumoAlternativa(alt: RouteAlternative, cost: string): string {
+function resumoAlternativa(alt: RouteAlternative, cost: Cost): string {
   const duracao = `${alt.estimated_duration_minutes.toFixed(1)} min`
   const distancia = `${alt.distance_km.toFixed(1)} km`
   return cost === 'distance' ? `${distancia} · ${duracao}` : `${duracao} · ${distancia}`
 }
 
-function AltStepper({ alt, onSelectAlternative, onConfirm, onCancel }: AltStepperProps) {
+function AltStepper({ alt, cost, onSelectAlternative, onConfirm, onCancel }: AltStepperProps) {
   if (!alt.active || alt.legs === null) return null
   const leg = alt.legs[alt.step]
   if (leg === undefined) return null
@@ -65,7 +66,7 @@ function AltStepper({ alt, onSelectAlternative, onConfirm, onCancel }: AltSteppe
                   style={{ backgroundColor: CORES_OPCOES[index % CORES_OPCOES.length] }}
                 />
                 <span className="alt-label">Rota {index + 1}</span>
-                <span className="alt-meta">{resumoAlternativa(alternativa, 'duration')}</span>
+                <span className="alt-meta">{resumoAlternativa(alternativa, cost)}</span>
               </button>
             </li>
           )

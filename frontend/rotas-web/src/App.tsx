@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import {
   calculateAlternatives,
   calculateBatch,
@@ -15,6 +16,15 @@ import RouteMap from './components/RouteMap'
 import RoutePanel from './components/RoutePanel'
 import VehiclesView from './components/VehiclesView'
 import type { AltState } from './components/AltStepper'
+import { ConfirmDialog } from './components/ConfirmDialog'
+import { HelpDialog } from './components/HelpDialog'
+import { SaveRouteModal } from './components/SaveRouteModal'
+import { BaseNameModal } from './components/BaseNameModal'
+import { VehicleFormModal } from './components/VehicleFormModal'
+import { Icon } from './components/Icon'
+import { Spinner } from './components/Spinner'
+import { ToastProvider } from './components/Toaster'
+import { useToasts } from './toast'
 import type {
   Algorithm,
   Base,
@@ -34,6 +44,13 @@ import './App.css'
 
 type Visao = 'rotas' | 'veiculos'
 
+interface Confirmacao {
+  titulo: string
+  mensagem: ReactNode
+  confirmarLabel: string
+  executar: () => Promise<void>
+}
+
 function criarVeiculo(numero: number): VehicleRoute {
   return { id: crypto.randomUUID(), label: `Veículo ${numero}`, points: [] }
 }
@@ -50,10 +67,7 @@ function App() {
   const [algorithm, setAlgorithm] = useState<Algorithm>('dijkstra')
   const [cost, setCost] = useState<Cost>('duration')
   const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [results, setResults] = useState<Record<string, RouteResponse> | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const [graphInfo, setGraphInfo] = useState<GraphInfo | null>(null)
   const [savedRoutes, setSavedRoutes] = useState<SavedRouteSummary[]>([])
   const [saveName, setSaveName] = useState('')
@@ -64,6 +78,15 @@ function App() {
   const [baseName, setBaseName] = useState('')
   const [view, setView] = useState<Visao>('rotas')
   const [veiculosCadastrados, setVeiculosCadastrados] = useState<Veiculo[]>([])
+
+  const [salvarAberta, setSalvarAberta] = useState(false)
+  const [ajudaAberta, setAjudaAberta] = useState(false)
+  const [nomearBaseAberto, setNomearBaseAberto] = useState(false)
+  const [formVeiculoAberto, setFormVeiculoAberto] = useState(false)
+  const [confirmacao, setConfirmacao] = useState<Confirmacao | null>(null)
+  const [confirmLoading, setConfirmLoading] = useState(false)
+
+  const toasts = useToasts()
 
   useEffect(() => {
     getGraphInfo().then(setGraphInfo).catch(() => setGraphInfo(null))
@@ -80,7 +103,6 @@ function App() {
   const invalidate = () => {
     sairDasAlternativas()
     setResults(null)
-    setError(null)
   }
 
   const addPoint = (position: LatLng) => {
@@ -130,7 +152,6 @@ function App() {
       delete copia[id]
       return copia
     })
-    setError(null)
   }
 
   const updateLabel = (id: string, label: string) => {
@@ -153,8 +174,6 @@ function App() {
       })),
     }
     setLoading(true)
-    setError(null)
-    setNotice(null)
     setResults(null)
     try {
       const response = await calculateBatch(request)
@@ -171,7 +190,7 @@ function App() {
         }),
       )
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao calcular as rotas')
+      toasts.error(err instanceof Error ? err.message : 'Erro ao calcular as rotas')
     } finally {
       setLoading(false)
     }
@@ -181,8 +200,6 @@ function App() {
     const ativo = vehicles.find((v) => v.id === activeVehicleId)
     if (ativo === undefined || ativo.points.length < 2 || loading) return
     setLoading(true)
-    setError(null)
-    setNotice(null)
     try {
       const resposta = await calculateAlternatives({
         origin: ativo.points[0],
@@ -199,8 +216,9 @@ function App() {
         legs: resposta.legs,
         selections: {},
       })
+      toasts.success('Alternativas calculadas.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao calcular alternativas')
+      toasts.error(err instanceof Error ? err.message : 'Erro ao calcular alternativas')
     } finally {
       setLoading(false)
     }
@@ -262,11 +280,12 @@ function App() {
       ),
     )
     sairDasAlternativas()
-    setNotice('Rota montada com as alternativas escolhidas.')
+    toasts.success('Rota montada com as alternativas escolhidas.')
   }
 
-  const startAddBase = () => {
-    setBaseName('')
+  const iniciarAdicaoDeBase = (nome: string) => {
+    setBaseName(nome)
+    setNomearBaseAberto(false)
     setAddingBase(true)
   }
 
@@ -277,17 +296,17 @@ function App() {
 
   const handleMapClick = async (position: LatLng) => {
     if (addingBase) {
-      if (baseName.trim() === '') {
-        setError('Dê um nome à base antes de clicar no mapa.')
-        return
-      }
       try {
-        const base = await createBase({ name: baseName.trim(), lat: position.lat, lng: position.lng })
+        const base = await createBase({
+          name: baseName.trim(),
+          lat: position.lat,
+          lng: position.lng,
+        })
         setBases((prev) => [...prev, base].sort((a, b) => a.name.localeCompare(b.name)))
-        setNotice(`Base "${base.name}" criada.`)
+        toasts.success(`Base "${base.name}" criada.`)
         cancelAddBase()
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erro ao criar a base')
+        toasts.error(err instanceof Error ? err.message : 'Erro ao criar a base')
       }
       return
     }
@@ -305,23 +324,93 @@ function App() {
     invalidate()
   }
 
-  const handleDeleteBase = async (id: number) => {
+  const pedirExclusaoDeBase = (base: Base) => {
+    setConfirmacao({
+      titulo: 'Excluir base',
+      mensagem: (
+        <>
+          Excluir a base <strong>{base.name}</strong>? Os veículos que usam esta localização não
+          serão alterados.
+        </>
+      ),
+      confirmarLabel: 'Excluir',
+      executar: async () => {
+        await deleteBase(base.id)
+        setBases((prev) => prev.filter((b) => b.id !== base.id))
+        toasts.success('Base excluída.')
+      },
+    })
+  }
+
+  const pedirRemocaoDeVeiculoDeRota = (id: string) => {
+    const veiculo = vehicles.find((v) => v.id === id)
+    setConfirmacao({
+      titulo: 'Remover veículo',
+      mensagem: (
+        <>
+          Remover <strong>{veiculo?.label ?? 'o veículo'}</strong> desta rota?
+        </>
+      ),
+      confirmarLabel: 'Remover',
+      executar: async () => {
+        removeVehicle(id)
+        toasts.success('Veículo removido da rota.')
+      },
+    })
+  }
+
+  const pedirExclusaoDeRotaSalva = (saved: SavedRouteSummary) => {
+    setConfirmacao({
+      titulo: 'Excluir rota salva',
+      mensagem: (
+        <>
+          Excluir a rota <strong>{saved.name}</strong>? Esta ação não pode ser desfeita.
+        </>
+      ),
+      confirmarLabel: 'Excluir',
+      executar: async () => {
+        await deleteSavedRoute(saved.id)
+        setSavedRoutes((prev) => prev.filter((r) => r.id !== saved.id))
+        toasts.success('Rota salva excluída.')
+      },
+    })
+  }
+
+  const pedirExclusaoDeVeiculo = (veiculo: Veiculo) => {
+    setConfirmacao({
+      titulo: 'Excluir veículo',
+      mensagem: (
+        <>
+          Excluir <strong>{veiculo.modelo}</strong> ({veiculo.placa})? Esta ação não pode ser
+          desfeita.
+        </>
+      ),
+      confirmarLabel: 'Excluir',
+      executar: async () => {
+        await deleteVehicle(veiculo.id)
+        setVeiculosCadastrados((prev) => prev.filter((v) => v.id !== veiculo.id))
+        toasts.success('Veículo excluído.')
+      },
+    })
+  }
+
+  const executarConfirmacao = async () => {
+    if (confirmacao === null) return
+    setConfirmLoading(true)
     try {
-      await deleteBase(id)
-      setBases((prev) => prev.filter((b) => b.id !== id))
+      await confirmacao.executar()
+      setConfirmacao(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao excluir a base')
+      toasts.error(err instanceof Error ? err.message : 'Não foi possível concluir a ação')
+      setConfirmacao(null)
+    } finally {
+      setConfirmLoading(false)
     }
   }
 
   const cadastrarVeiculo = async (req: NovoVeiculo) => {
     const veiculo = await createVehicle(req)
     setVeiculosCadastrados((prev) => [veiculo, ...prev])
-  }
-
-  const excluirVeiculo = async (id: number) => {
-    await deleteVehicle(id)
-    setVeiculosCadastrados((prev) => prev.filter((v) => v.id !== id))
   }
 
   const selecionarVeiculo = (id: string) => {
@@ -336,33 +425,19 @@ function App() {
     setVehicles([v])
     setActiveVehicleId(v.id)
     setResults(null)
-    setError(null)
-    setNotice(null)
     sairDasAlternativas()
+    toasts.success('Mapa e rotas limpos.')
   }
 
-  const handleSave = async () => {
-    if (results === null || saveName.trim() === '') return
-    setSaving(true)
-    setError(null)
-    setNotice(null)
-    try {
-      const rotas = Object.entries(results).map(([id, rota]) => ({ ...rota, id }))
-      await saveRoute({ name: saveName.trim(), algorithm, routes: rotas })
-      setSaveName('')
-      setSavedRoutes(await listSavedRoutes())
-      setNotice('Rota salva com sucesso.')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao salvar a rota')
-    } finally {
-      setSaving(false)
-    }
+  const handleSave = async (nome: string) => {
+    if (results === null) throw new Error('Calcule as rotas antes de salvar.')
+    const rotas = Object.entries(results).map(([id, rota]) => ({ ...rota, id }))
+    await saveRoute({ name: nome, algorithm, routes: rotas })
+    setSavedRoutes(await listSavedRoutes())
   }
 
   const loadSaved = async (id: number) => {
     setLoading(true)
-    setError(null)
-    setNotice(null)
     try {
       const detalhe = await getSavedRoute(id)
       const novos: VehicleRoute[] = detalhe.routes.map((item, i) => ({
@@ -379,28 +454,130 @@ function App() {
       setResults(porId)
       setAlgorithm(detalhe.algorithm)
       setSaveName(detalhe.name)
-      setNotice('Rota carregada.')
+      toasts.success('Rota carregada.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar a rota')
+      toasts.error(err instanceof Error ? err.message : 'Erro ao carregar a rota')
     } finally {
       setLoading(false)
     }
   }
 
-  const deleteSaved = async (id: number) => {
-    try {
-      await deleteSavedRoute(id)
-      setSavedRoutes((prev) => prev.filter((r) => r.id !== id))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao excluir a rota')
+  const modalAberto =
+    salvarAberta || ajudaAberta || nomearBaseAberto || formVeiculoAberto || confirmacao !== null
+
+  const acoesRef = useRef({
+    calcular: () => void handleCalculate(),
+    alternativas: () => void handleAlternatives(),
+    limpar: handleClear,
+    cancelarEsc: () => {
+      if (addingBase) {
+        cancelAddBase()
+      } else if (alt.active) {
+        sairDasAlternativas()
+      }
+    },
+    alternarAjuda: () => setAjudaAberta(true),
+  })
+
+  const cenarioRef = useRef({
+    canCalculate: false,
+    loading: false,
+    altActive: false,
+    addingBase: false,
+    modalAberto: false,
+    view,
+  })
+
+  useEffect(() => {
+    acoesRef.current = {
+      calcular: () => void handleCalculate(),
+      alternativas: () => void handleAlternatives(),
+      limpar: handleClear,
+      cancelarEsc: () => {
+        if (addingBase) {
+          cancelAddBase()
+        } else if (alt.active) {
+          sairDasAlternativas()
+        }
+      },
+      alternarAjuda: () => setAjudaAberta(true),
     }
-  }
+  })
+
+  useEffect(() => {
+    cenarioRef.current = {
+      canCalculate,
+      loading,
+      altActive: alt.active,
+      addingBase,
+      modalAberto,
+      view,
+    }
+  })
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const c = cenarioRef.current
+      if (c.modalAberto && event.key !== '?') {
+        if (event.key === 'Escape') return
+      }
+      const alvo = event.target as HTMLElement | null
+      const digitando =
+        alvo != null && alvo.tagName === 'INPUT' ||
+        alvo?.tagName === 'TEXTAREA' ||
+        alvo?.tagName === 'SELECT' ||
+        (alvo?.isContentEditable ?? false)
+      const meta = event.ctrlKey || event.metaKey
+      if (digitando && !meta && event.key !== 'Escape') return
+      if (meta && event.key === 'Enter') {
+        event.preventDefault()
+        if (c.canCalculate && !c.loading && !c.modalAberto) acoesRef.current.calcular()
+        return
+      }
+      if (meta && event.shiftKey && (event.key === 'a' || event.key === 'A')) {
+        event.preventDefault()
+        if (c.canCalculate && !c.loading && !c.modalAberto) acoesRef.current.alternativas()
+        return
+      }
+      if (meta && (event.key === 'l' || event.key === 'L')) {
+        event.preventDefault()
+        if (!c.modalAberto) acoesRef.current.limpar()
+        return
+      }
+      if (meta && event.key === '1') {
+        event.preventDefault()
+        if (!c.modalAberto) setView('rotas')
+        return
+      }
+      if (meta && event.key === '2') {
+        event.preventDefault()
+        if (!c.modalAberto) setView('veiculos')
+        return
+      }
+      if (event.key === 'Escape') {
+        if (c.modalAberto) return
+        acoesRef.current.cancelarEsc()
+        return
+      }
+      if (event.key === '?') {
+        if (c.modalAberto) return
+        acoesRef.current.alternarAjuda()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   return (
     <div className="app">
       <header className="app-topbar">
-        <span className="app-brand">Rotas Go</span>
-        <nav className="view-tabs">
+        <span className="app-brand">
+          <span className="app-brand-mark">
+            <Icon name="route" size={16} />
+          </span>
+          Rotas Go
+        </span>
+        <nav className="view-tabs" aria-label="Seções">
           <button
             type="button"
             className={view === 'rotas' ? 'view-tab view-tab-active' : 'view-tab'}
@@ -416,7 +593,56 @@ function App() {
             Veículos
           </button>
         </nav>
+        {view === 'rotas' && (
+          <div className="topbar-actions">
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={() => void handleCalculate()}
+              disabled={!canCalculate}
+            >
+              {loading ? (
+                <>
+                  <Spinner size={14} /> Calculando…
+                </>
+              ) : (
+                <>
+                  <Icon name="zap" size={15} /> Calcular
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => void handleAlternatives()}
+              disabled={!canCalculate || alt.active}
+            >
+              <Icon name="route" size={15} /> Alternativas
+            </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => setSalvarAberta(true)}
+              disabled={results === null}
+            >
+              <Icon name="save" size={15} /> Salvar
+            </button>
+            <button type="button" className="button button-ghost" onClick={handleClear}>
+              <Icon name="clear" size={15} /> Limpar
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          className="topbar-help"
+          onClick={() => setAjudaAberta(true)}
+          aria-label="Ajuda e atalhos de teclado"
+          title="Atalhos de teclado"
+        >
+          <Icon name="keyboard" size={17} />
+        </button>
       </header>
+
       <div className="app-body">
         {view === 'rotas' ? (
           <>
@@ -428,38 +654,24 @@ function App() {
               vehicles={vehicles}
               activeVehicleId={activeVehicleId}
               results={results}
-              loading={loading}
-              saving={saving}
-              error={error}
-              notice={notice}
-              canCalculate={canCalculate}
               graphInfo={graphInfo}
               savedRoutes={savedRoutes}
-              saveName={saveName}
-              onSaveNameChange={setSaveName}
+              alt={alt}
               onSelectVehicle={selecionarVeiculo}
               onAddVehicle={addVehicle}
-              onRemoveVehicle={removeVehicle}
+              onRemoveVehicle={pedirRemocaoDeVeiculoDeRota}
               onUpdateLabel={updateLabel}
               onRemovePoint={removePoint}
-              onCalculate={handleCalculate}
-              onAlternatives={handleAlternatives}
-              onClear={handleClear}
-              onSave={handleSave}
-              onLoadSaved={loadSaved}
-              onDeleteSaved={deleteSaved}
-              alt={alt}
               onSelectAlternative={selectAlternative}
               onApplyAlternatives={applyAlternatives}
               onCancelAlternatives={sairDasAlternativas}
+              onLoadSaved={loadSaved}
+              onDeleteSaved={pedirExclusaoDeRotaSalva}
               bases={bases}
               addingBase={addingBase}
-              baseName={baseName}
-              onBaseNameChange={setBaseName}
-              onStartAddBase={startAddBase}
-              onCancelAddBase={cancelAddBase}
+              onStartAddBase={() => setNomearBaseAberto(true)}
               onSelectBase={selectBaseAsPoint}
-              onDeleteBase={handleDeleteBase}
+              onDeleteBase={pedirExclusaoDeBase}
             />
             <RouteMap
               vehicles={vehicles}
@@ -468,22 +680,76 @@ function App() {
               alt={alt}
               altVehicleId={altVehicleId}
               bases={bases}
+              loading={loading}
+              addingBase={addingBase}
+              baseName={baseName}
               onMapClick={handleMapClick}
               onPointDrag={movePoint}
               onSelectAlternative={selectAlternative}
               onSelectBase={selectBaseAsPoint}
+              onClear={handleClear}
+              onCancelAddBase={cancelAddBase}
             />
           </>
         ) : (
           <VehiclesView
             veiculos={veiculosCadastrados}
-            onCadastrar={cadastrarVeiculo}
-            onExcluir={excluirVeiculo}
+            onNovoVeiculo={() => setFormVeiculoAberto(true)}
+            onExcluir={pedirExclusaoDeVeiculo}
           />
         )}
       </div>
+
+      {salvarAberta && (
+        <SaveRouteModal
+          initialName={saveName}
+          totalVeiculos={Object.keys(results ?? {}).length}
+          totalKm={Object.values(results ?? {}).reduce((acc, r) => acc + r.distance_km, 0)}
+          totalMin={Object.values(results ?? {}).reduce(
+            (acc, r) => acc + r.estimated_duration_minutes,
+            0,
+          )}
+          onConfirm={handleSave}
+          onClose={() => setSalvarAberta(false)}
+        />
+      )}
+
+      {nomearBaseAberto && (
+        <BaseNameModal
+          initialName=""
+          onConfirm={iniciarAdicaoDeBase}
+          onClose={() => setNomearBaseAberto(false)}
+        />
+      )}
+
+      {formVeiculoAberto && (
+        <VehicleFormModal
+          onCadastrar={cadastrarVeiculo}
+          onClose={() => setFormVeiculoAberto(false)}
+        />
+      )}
+
+      <HelpDialog open={ajudaAberta} onClose={() => setAjudaAberta(false)} />
+
+      <ConfirmDialog
+        open={confirmacao !== null}
+        title={confirmacao?.titulo ?? ''}
+        message={confirmacao?.mensagem}
+        confirmLabel={confirmacao?.confirmarLabel}
+        loading={confirmLoading}
+        onConfirm={() => void executarConfirmacao()}
+        onCancel={() => {
+          if (!confirmLoading) setConfirmacao(null)
+        }}
+      />
     </div>
   )
 }
 
-export default App
+export default function AppRoot() {
+  return (
+    <ToastProvider>
+      <App />
+    </ToastProvider>
+  )
+}
