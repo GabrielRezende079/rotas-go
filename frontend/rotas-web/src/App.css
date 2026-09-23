@@ -365,3 +365,69 @@
   display: flex;
   gap: 8px;
 }
+
+.alt-section {
+  border: 1px solid #bfdbfe;
+  background-color: #eff6ff;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alt-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alt-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: #ffffff;
+  font-size: 13px;
+  color: #111827;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.alt-option:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.alt-option-selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.alt-color-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.alt-label {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.alt-meta {
+  margin-left: auto;
+  color: #6b7280;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.button-block {
+  width: 100%;
+}

@@ -68,6 +68,22 @@ func reconstruirResultado(g *Grafo, anterior map[int64]passoAnterior, origemID, 
 
 // Dijkstra encontra a menor distância viária entre dois nós.
 func (g *Grafo) Dijkstra(origemID, destinoID int64) ResultadoBusca {
+	return g.dijkstraParametrizado(origemID, destinoID, false, nil, nil)
+}
+
+// DijkstraPorDuracao encontra o caminho mais rápido entre dois nós.
+func (g *Grafo) DijkstraPorDuracao(origemID, destinoID int64) ResultadoBusca {
+	return g.dijkstraParametrizado(origemID, destinoID, true, nil, nil)
+}
+
+// dijkstraParametrizado executa Dijkstra com custo opcional por duração e com
+// suporte a conjuntos de nós e arestas proibidos (usado pelo k-ésimos caminhos).
+func (g *Grafo) dijkstraParametrizado(
+	origemID, destinoID int64,
+	porDuracao bool,
+	ignorarNos map[int64]bool,
+	ignorarArestas map[[2]int64]bool,
+) ResultadoBusca {
 	if _, ok := g.vertices[origemID]; !ok {
 		return ResultadoBusca{}
 	}
@@ -75,7 +91,14 @@ func (g *Grafo) Dijkstra(origemID, destinoID int64) ResultadoBusca {
 		return ResultadoBusca{}
 	}
 
-	distancias := map[int64]float64{origemID: 0}
+	custoDe := func(a Aresta) float64 {
+		if porDuracao {
+			return a.DuracaoMin
+		}
+		return a.DistanciaKm
+	}
+
+	custos := map[int64]float64{origemID: 0}
 	anterior := make(map[int64]passoAnterior)
 	fila := &filaPrioridade{}
 	heap.Init(fila)
@@ -84,7 +107,7 @@ func (g *Grafo) Dijkstra(origemID, destinoID int64) ResultadoBusca {
 
 	for fila.Len() > 0 {
 		atual := heap.Pop(fila).(*itemPQ)
-		melhor, existe := distancias[atual.id]
+		melhor, existe := custos[atual.id]
 		if !existe || atual.custo > melhor {
 			continue
 		}
@@ -93,27 +116,32 @@ func (g *Grafo) Dijkstra(origemID, destinoID int64) ResultadoBusca {
 			break
 		}
 		for _, aresta := range g.adjacencias[atual.id] {
-			novo := melhor + aresta.DistanciaKm
-			anteriorDist, conhecido := distancias[aresta.Destino]
-			if !conhecido {
-				anteriorDist = math.Inf(1)
+			if ignorarNos != nil && ignorarNos[aresta.Destino] {
+				continue
 			}
-			if novo < anteriorDist {
-				distancias[aresta.Destino] = novo
+			if ignorarArestas != nil && ignorarArestas[[2]int64{atual.id, aresta.Destino}] {
+				continue
+			}
+			novo := melhor + custoDe(aresta)
+			anteriorCusto, conhecido := custos[aresta.Destino]
+			if !conhecido {
+				anteriorCusto = math.Inf(1)
+			}
+			if novo < anteriorCusto {
+				custos[aresta.Destino] = novo
 				anterior[aresta.Destino] = passoAnterior{origem: atual.id, aresta: aresta}
 				heap.Push(fila, &itemPQ{id: aresta.Destino, prioridade: novo, custo: novo})
 			}
 		}
 	}
 
-	distancia, ok := distancias[destinoID]
-	if !ok {
+	if _, ok := custos[destinoID]; !ok {
 		return ResultadoBusca{}
 	}
 	resultado := reconstruirResultado(g, anterior, origemID, destinoID)
-	resultado.DistanciaKm = distancia
 	resultado.NodosVisitados = visitados
 	for _, aresta := range resultado.Arestas {
+		resultado.DistanciaKm += aresta.DistanciaKm
 		resultado.DuracaoMin += aresta.DuracaoMin
 	}
 	return resultado

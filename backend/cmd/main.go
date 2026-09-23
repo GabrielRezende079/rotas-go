@@ -46,6 +46,7 @@ func main() {
 	api := engine.Group("/api/v1")
 	api.GET("/info", controller.Info)
 	api.POST("/route", controller.CalcularRota)
+	api.POST("/route/alternatives", controller.CalcularAlternativas)
 	api.POST("/routes", controller.CalcularLote)
 	api.POST("/routes/saved", controller.SalvarRota)
 	api.GET("/routes/saved", controller.ListarRotasSalvas)

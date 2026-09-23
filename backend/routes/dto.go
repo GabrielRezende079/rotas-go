@@ -15,11 +15,13 @@ type Coordenadas struct {
 
 // RotaRequest é o corpo da requisição POST /api/v1/route.
 // Waypoints são pontos de passagem opcionais entre origem e destino.
+// Custo define a métrica minimizada: duracao (padrão) ou distancia.
 type RotaRequest struct {
 	Origem    *Coordenadas  `json:"origin" binding:"required"`
 	Destino   *Coordenadas  `json:"destination" binding:"required"`
 	Waypoints []Coordenadas `json:"waypoints"`
 	Algoritmo string        `json:"algorithm" binding:"required"`
+	Custo     string        `json:"cost"`
 }
 
 // PontoAjustado representa o ponto real da via usado no cálculo.
@@ -66,6 +68,7 @@ type VeiculoRequisicao struct {
 type LoteRequest struct {
 	Algoritmo string              `json:"algorithm" binding:"required"`
 	Veiculos  []VeiculoRequisicao `json:"vehicles" binding:"required,min=1"`
+	Custo     string              `json:"cost"`
 }
 
 // LoteItemResponse é o resultado calculado de um veículo dentro do lote.
@@ -102,6 +105,37 @@ type RotaSalvaSummary struct {
 type RotaSalvaDetalhe struct {
 	RotaSalvaSummary
 	Rotas json.RawMessage `json:"routes"`
+}
+
+// AlternativasRequest é o corpo de POST /api/v1/route/alternatives.
+type AlternativasRequest struct {
+	Origem          *Coordenadas  `json:"origin" binding:"required"`
+	Destino         *Coordenadas  `json:"destination" binding:"required"`
+	Waypoints       []Coordenadas `json:"waypoints"`
+	Custo           string        `json:"cost"`
+	MaxAlternativas int           `json:"max_alternatives"`
+}
+
+// AlternativaResponse é uma das rotas alternativas de um trecho.
+type AlternativaResponse struct {
+	DistanciaKm        float64       `json:"distance_km"`
+	DuracaoEstimadaMin float64       `json:"estimated_duration_minutes"`
+	NodosVisitados     int           `json:"nodes_visited"`
+	CustoTotal         float64       `json:"total_cost"`
+	Geometria          []Coordenadas `json:"geometry"`
+}
+
+// TrechoAlternativas reúne as alternativas de um par origem/destino.
+type TrechoAlternativas struct {
+	Origem       PontoAjustado         `json:"origin"`
+	Destino      PontoAjustado         `json:"destination"`
+	Alternativas []AlternativaResponse `json:"alternatives"`
+}
+
+// AlternativasResponse é a resposta de POST /api/v1/route/alternatives.
+type AlternativasResponse struct {
+	Custo   string               `json:"cost"`
+	Trechos []TrechoAlternativas `json:"legs"`
 }
 
 // InfoResponse descreve o conjunto de dados carregado pela API.

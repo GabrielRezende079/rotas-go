@@ -175,3 +175,87 @@ func (f *storeFake) Buscar(_ context.Context, _ int64) (storage.RotaSalva, error
 }
 
 func (f *storeFake) Excluir(_ context.Context, _ int64) error { return nil }
+
+func grafoComAlternativas() *grafo.Grafo {
+	g := grafo.NovoGrafo()
+	for id := 1; id <= 10; id++ {
+		g.AddVertice(grafo.Vertice{ID: int64(id), Lat: -20.0 - float64(id)/1000, Lng: -40.0 - float64(id)/1000})
+	}
+	// Corredor 1 (mais rápido): 1-2-3-4-5-6-10
+	for i := 1; i <= 5; i++ {
+		g.AddArestaBidirecional(int64(i), int64(i+1), 1, 2)
+	}
+	g.AddArestaBidirecional(6, 10, 1, 2)
+	// Corredor 2 (mais lento): 1-7-8-9-10
+	for _, par := range [][2]int64{{1, 7}, {7, 8}, {8, 9}, {9, 10}} {
+		g.AddArestaBidirecional(par[0], par[1], 10, 4)
+	}
+	g.SetMetadata("OSM teste", time.Unix(1, 0))
+	return g
+}
+
+func TestCalcularAlternativasDevolveAlternativasPorCustoTempo(t *testing.T) {
+	service := NewRouteService(grafoComAlternativas(), nil)
+	resp, err := service.CalcularAlternativas(AlternativasRequest{
+		Origem:          &Coordenadas{Lat: -20.0, Lng: -40.0},
+		Destino:         &Coordenadas{Lat: -20.0 - 10.0/1000, Lng: -40.0 - 10.0/1000},
+		MaxAlternativas: 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Trechos) != 1 {
+		t.Fatalf("trechos = %d, esperado 1", len(resp.Trechos))
+	}
+	trecho := resp.Trechos[0]
+	if len(trecho.Alternativas) < 2 {
+		t.Fatalf("alternativas = %d, esperado ao menos 2", len(trecho.Alternativas))
+	}
+	primeira, segunda := trecho.Alternativas[0], trecho.Alternativas[1]
+	if primeira.CustoTotal > segunda.CustoTotal {
+		t.Fatalf("alternativas fora de ordem de custo: %f > %f", primeira.CustoTotal, segunda.CustoTotal)
+	}
+	if len(primeira.Geometria) == 0 || len(segunda.Geometria) == 0 {
+		t.Fatalf("geometria vazia em alternativa")
+	}
+	if resp.Custo != "duration" {
+		t.Fatalf("custo = %q, esperado duration", resp.Custo)
+	}
+}
+
+func TestCalcularAlternativasSemCaminhoRetorna422(t *testing.T) {
+	g := grafo.NovoGrafo()
+	g.AddVertice(grafo.Vertice{ID: 1, Lat: -20.0, Lng: -40.0})
+	g.AddVertice(grafo.Vertice{ID: 2, Lat: -20.01, Lng: -40.01})
+	g.SetMetadata("OSM teste", time.Unix(1, 0))
+	service := NewRouteService(g, nil)
+	_, err := service.CalcularAlternativas(AlternativasRequest{
+		Origem:  &Coordenadas{Lat: -20.0, Lng: -40.0},
+		Destino: &Coordenadas{Lat: -20.01, Lng: -40.01},
+	})
+	var httpErr erroRequisicao
+	if !errors.As(err, &httpErr) || httpErr.codigo != http.StatusUnprocessableEntity {
+		t.Fatalf("esperava 422, obtido %v", err)
+	}
+}
+
+func TestCalcularAlternativasComWaypointsResolveTodosOsTrechos(t *testing.T) {
+	service := NewRouteService(grafoComAlternativas(), nil)
+	resp, err := service.CalcularAlternativas(AlternativasRequest{
+		Origem:          &Coordenadas{Lat: -20.0, Lng: -40.0},
+		Destino:         &Coordenadas{Lat: -20.0 - 10.0/1000, Lng: -40.0 - 10.0/1000},
+		Waypoints:       []Coordenadas{{Lat: -20.0 - 3.0/1000, Lng: -40.0 - 3.0/1000}},
+		MaxAlternativas: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Trechos) != 2 {
+		t.Fatalf("trechos = %d, esperado 2", len(resp.Trechos))
+	}
+	for _, trecho := range resp.Trechos {
+		if len(trecho.Alternativas) == 0 {
+			t.Fatalf("trecho sem alternativas: %+v", trecho)
+		}
+	}
+}

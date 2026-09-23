@@ -1,4 +1,6 @@
 import type {
+  AlternativesRequest,
+  AlternativesResponse,
   BatchRouteRequest,
   BatchRouteResponse,
   GraphInfo,
@@ -57,6 +59,12 @@ export async function calculateRoute(req: RouteRequest): Promise<RouteResponse> 
 
 export async function calculateBatch(req: BatchRouteRequest): Promise<BatchRouteResponse> {
   return postJson<BatchRouteResponse>('/routes', req)
+}
+
+export async function calculateAlternatives(
+  req: AlternativesRequest,
+): Promise<AlternativesResponse> {
+  return postJson<AlternativesResponse>('/route/alternatives', req)
 }
 
 export async function saveRoute(req: {

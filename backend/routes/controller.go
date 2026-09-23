@@ -67,6 +67,21 @@ func (ct *RouteController) CalcularLote(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// CalcularAlternativas trata POST /api/v1/route/alternatives.
+func (ct *RouteController) CalcularAlternativas(c *gin.Context) {
+	var req AlternativasRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "corpo da requisição inválido"})
+		return
+	}
+	resp, err := ct.service.CalcularAlternativas(req)
+	if err != nil {
+		responderErro(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
 // SalvarRota trata POST /api/v1/routes/saved.
 func (ct *RouteController) SalvarRota(c *gin.Context) {
 	var req SalvarRotaRequest

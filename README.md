@@ -16,7 +16,7 @@ importador Go (paulmach/osm)
         ↓
 grafo direcionado compactado
         ↓
-API Gin → Dijkstra / A*  →  PostgreSQL (rotas salvas)
+API Gin → Dijkstra / A* / Yen (alternativas)  →  PostgreSQL (rotas salvas)
         ↓
 React + Leaflet
 ```
@@ -98,12 +98,19 @@ ROTAS_GRAPH_FILE=/caminho/grafo.gz go run ./cmd
 - `GET /api/v1/info`: origem e tamanho do grafo carregado;
 - `POST /api/v1/route`: calcula uma rota com `dijkstra` ou `astar`, incluindo
   pontos de passagem (`waypoints`) opcionais entre origem e destino;
+- `POST /api/v1/route/alternatives`: calcula até 3 rotas alternativas mais
+  rápidas por trecho (algoritmo de Yen sobre a duração estimada, com filtro de
+  dissimilaridade); trechos são resolvidos em paralelo;
 - `POST /api/v1/routes`: calcula a rota de vários veículos de uma vez
   (requisição em lote, executada em paralelo);
 - `POST /api/v1/routes/saved`: salva um lote de rotas calculado;
 - `GET /api/v1/routes/saved`: lista os resumos das rotas salvas;
 - `GET /api/v1/routes/saved/:id`: busca uma rota salva com o snapshot completo;
 - `DELETE /api/v1/routes/saved/:id`: exclui uma rota salva.
+
+O campo `cost` (opcional) escolhe a métrica a minimizar nas rotas e
+alternativas: `duration` (padrão, tempo estimado em minutos) ou `distance`
+(distância em quilômetros).
 
 Rota com pontos de passagem:
 
@@ -112,7 +119,8 @@ Rota com pontos de passagem:
   "origin": { "lat": -20.3155, "lng": -40.3128 },
   "destination": { "lat": -20.3297, "lng": -40.2925 },
   "waypoints": [{ "lat": -20.2635, "lng": -40.4166 }],
-  "algorithm": "astar"
+  "algorithm": "astar",
+  "cost": "duration"
 }
 ```
 
@@ -120,11 +128,29 @@ A resposta contém distância, duração estimada, nós visitados, tempo do
 algoritmo, todos os pontos da geometria percorrida e a quebra por trecho
 (`legs`), além dos pontos ajustados (`origin`, `waypoints`, `destination`).
 
+Rotas alternativas:
+
+```json
+{
+  "origin": { "lat": -20.3200, "lng": -40.3377 },
+  "destination": { "lat": -20.1795, "lng": -40.2994 },
+  "cost": "duration",
+  "max_alternatives": 3
+}
+```
+
+A resposta reúne, por trecho (`legs`), as alternativas encontradas em
+`alternatives` — cada uma com distância, duração estimada, nós visitados,
+custo total na métrica escolhida e a própria geometria. Quando não existe uma
+rota diferente o suficiente da mais rápida, apenas uma alternativa é
+devolvida.
+
 Lote de veículos:
 
 ```json
 {
   "algorithm": "dijkstra",
+  "cost": "duration",
   "vehicles": [
     {
       "id": "v1",

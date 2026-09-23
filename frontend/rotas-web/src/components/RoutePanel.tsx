@@ -1,14 +1,18 @@
 import type {
   Algorithm,
+  Cost,
   GraphInfo,
   RouteResponse,
   SavedRouteSummary,
   VehicleRoute,
 } from '../types'
+import AltStepper, { type AltState } from './AltStepper'
 
 interface RoutePanelProps {
   algorithm: Algorithm
   onAlgorithmChange: (algorithm: Algorithm) => void
+  cost: Cost
+  onCostChange: (cost: Cost) => void
   vehicles: VehicleRoute[]
   activeVehicleId: string | null
   results: Record<string, RouteResponse> | null
@@ -27,10 +31,15 @@ interface RoutePanelProps {
   onUpdateLabel: (id: string, label: string) => void
   onRemovePoint: (vehicleId: string, index: number) => void
   onCalculate: () => void
+  onAlternatives: () => void
   onClear: () => void
   onSave: () => void
   onLoadSaved: (id: number) => void
   onDeleteSaved: (id: number) => void
+  alt: AltState
+  onSelectAlternative: (step: number, alternativeIndex: number) => void
+  onApplyAlternatives: () => void
+  onCancelAlternatives: () => void
 }
 
 function nomeDoPonto(index: number, total: number): string {
@@ -42,6 +51,8 @@ function nomeDoPonto(index: number, total: number): string {
 function RoutePanel({
   algorithm,
   onAlgorithmChange,
+  cost,
+  onCostChange,
   vehicles,
   activeVehicleId,
   results,
@@ -60,10 +71,15 @@ function RoutePanel({
   onUpdateLabel,
   onRemovePoint,
   onCalculate,
+  onAlternatives,
   onClear,
   onSave,
   onLoadSaved,
   onDeleteSaved,
+  alt,
+  onSelectAlternative,
+  onApplyAlternatives,
+  onCancelAlternatives,
 }: RoutePanelProps) {
   const ativo = vehicles.find((v) => v.id === activeVehicleId) ?? null
   const resultadoAtivo =
@@ -99,6 +115,18 @@ function RoutePanel({
         >
           <option value="dijkstra">Dijkstra</option>
           <option value="astar">A*</option>
+        </select>
+      </div>
+
+      <div className="field">
+        <label htmlFor="cost">Custo a minimizar</label>
+        <select
+          id="cost"
+          value={cost}
+          onChange={(event) => onCostChange(event.target.value as Cost)}
+        >
+          <option value="duration">Duração estimada</option>
+          <option value="distance">Distância</option>
         </select>
       </div>
 
@@ -186,6 +214,14 @@ function RoutePanel({
         >
           {loading ? 'Calculando…' : 'Calcular rotas'}
         </button>
+        <button
+          type="button"
+          className="button button-secondary"
+          onClick={onAlternatives}
+          disabled={canCalculate === false || alt.active}
+        >
+          {loading ? 'Calculando…' : 'Alternativas'}
+        </button>
         <button type="button" className="button button-secondary" onClick={onClear}>
           Limpar
         </button>
@@ -193,6 +229,13 @@ function RoutePanel({
 
       {error !== null && <div className="error-box">{error}</div>}
       {notice !== null && <div className="notice-box">{notice}</div>}
+
+      <AltStepper
+        alt={alt}
+        onSelectAlternative={onSelectAlternative}
+        onConfirm={onApplyAlternatives}
+        onCancel={onCancelAlternatives}
+      />
 
       {rotasSalvasVisiveis && results !== null && (
         <section className="save-section">

@@ -5,11 +5,14 @@ export interface LatLng {
 
 export type Algorithm = 'dijkstra' | 'astar'
 
+export type Cost = 'duration' | 'distance'
+
 export interface RouteRequest {
   origin: LatLng
   destination: LatLng
   algorithm: Algorithm
   waypoints?: LatLng[]
+  cost?: Cost
 }
 
 export interface SnappedPoint extends LatLng {
@@ -55,6 +58,7 @@ export interface BatchVehicleRequest {
 export interface BatchRouteRequest {
   algorithm: Algorithm
   vehicles: BatchVehicleRequest[]
+  cost?: Cost
 }
 
 export interface BatchRouteItem extends RouteResponse {
@@ -85,4 +89,31 @@ export interface GraphInfo {
   vertices: number
   edges: number
   real_road_graph: boolean
+}
+
+export interface AlternativesRequest {
+  origin: LatLng
+  destination: LatLng
+  waypoints?: LatLng[]
+  cost?: Cost
+  max_alternatives?: number
+}
+
+export interface RouteAlternative {
+  distance_km: number
+  estimated_duration_minutes: number
+  nodes_visited: number
+  total_cost: number
+  geometry: LatLng[]
+}
+
+export interface LegAlternatives {
+  origin: SnappedPoint
+  destination: SnappedPoint
+  alternatives: RouteAlternative[]
+}
+
+export interface AlternativesResponse {
+  cost: Cost
+  legs: LegAlternatives[]
 }

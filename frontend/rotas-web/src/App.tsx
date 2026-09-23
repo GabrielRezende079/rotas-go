@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  calculateAlternatives,
   calculateBatch,
   deleteSavedRoute,
   getGraphInfo,
@@ -9,11 +10,14 @@ import {
 } from './api/routes'
 import RouteMap from './components/RouteMap'
 import RoutePanel from './components/RoutePanel'
+import type { AltState } from './components/AltStepper'
 import type {
   Algorithm,
   BatchRouteRequest,
+  Cost,
   GraphInfo,
   LatLng,
+  RouteLeg,
   RouteResponse,
   SavedRouteSummary,
   VehicleRoute,
@@ -26,10 +30,15 @@ function criarVeiculo(numero: number): VehicleRoute {
 
 const primeiroVeiculo = criarVeiculo(1)
 
+function alternativasIniciais(): AltState {
+  return { active: false, step: 0, total: 0, legs: null, selections: {} }
+}
+
 function App() {
   const [vehicles, setVehicles] = useState<VehicleRoute[]>(() => [primeiroVeiculo])
   const [activeVehicleId, setActiveVehicleId] = useState<string>(primeiroVeiculo.id)
   const [algorithm, setAlgorithm] = useState<Algorithm>('dijkstra')
+  const [cost, setCost] = useState<Cost>('duration')
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [results, setResults] = useState<Record<string, RouteResponse> | null>(null)
@@ -38,13 +47,21 @@ function App() {
   const [graphInfo, setGraphInfo] = useState<GraphInfo | null>(null)
   const [savedRoutes, setSavedRoutes] = useState<SavedRouteSummary[]>([])
   const [saveName, setSaveName] = useState('')
+  const [alt, setAlt] = useState<AltState>(alternativasIniciais)
+  const [altVehicleId, setAltVehicleId] = useState<string | null>(null)
 
   useEffect(() => {
     getGraphInfo().then(setGraphInfo).catch(() => setGraphInfo(null))
     listSavedRoutes().then(setSavedRoutes).catch(() => setSavedRoutes([]))
   }, [])
 
+  const sairDasAlternativas = () => {
+    setAlt(alternativasIniciais())
+    setAltVehicleId(null)
+  }
+
   const invalidate = () => {
+    sairDasAlternativas()
     setResults(null)
     setError(null)
   }
@@ -110,6 +127,7 @@ function App() {
     if (!canCalculate) return
     const request: BatchRouteRequest = {
       algorithm,
+      cost,
       vehicles: calculaveis.map((v) => ({
         id: v.id,
         origin: v.points[0],
@@ -142,6 +160,101 @@ function App() {
     }
   }
 
+  const handleAlternatives = async () => {
+    const ativo = vehicles.find((v) => v.id === activeVehicleId)
+    if (ativo === undefined || ativo.points.length < 2 || loading) return
+    setLoading(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const resposta = await calculateAlternatives({
+        origin: ativo.points[0],
+        destination: ativo.points[ativo.points.length - 1],
+        waypoints: ativo.points.slice(1, -1),
+        cost,
+        max_alternatives: 3,
+      })
+      setAltVehicleId(ativo.id)
+      setAlt({
+        active: true,
+        step: 0,
+        total: resposta.legs.length,
+        legs: resposta.legs,
+        selections: {},
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao calcular alternativas')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const selectAlternative = (step: number, alternativeIndex: number) => {
+    setAlt((prev) => {
+      if (!prev.active || prev.legs === null) return prev
+      const novaSelecao = { ...prev.selections, [step]: alternativeIndex }
+      const proximoPasso = step + 1 < prev.total ? step + 1 : step
+      return { ...prev, selections: novaSelecao, step: proximoPasso }
+    })
+  }
+
+  const applyAlternatives = () => {
+    if (!alt.active || alt.legs === null || altVehicleId === null) return
+    const legs: RouteLeg[] = alt.legs.map((leg, index) => {
+      const escolha = alt.selections[index] ?? 0
+      const alternativa = leg.alternatives[escolha] ?? leg.alternatives[0]
+      return {
+        origin: leg.origin,
+        destination: leg.destination,
+        distance_km: alternativa.distance_km,
+        estimated_duration_minutes: alternativa.estimated_duration_minutes,
+        nodes_visited: alternativa.nodes_visited,
+        geometry: alternativa.geometry,
+      }
+    })
+    const geometria: LatLng[] = []
+    legs.forEach((leg, index) => {
+      if (index === 0) {
+        geometria.push(...leg.geometry)
+      } else {
+        geometria.push(...leg.geometry.slice(1))
+      }
+    })
+    const totalDistancia = legs.reduce((acc, leg) => acc + leg.distance_km, 0)
+    const totalDuracao = legs.reduce((acc, leg) => acc + leg.estimated_duration_minutes, 0)
+    const totalVisitados = legs.reduce((acc, leg) => acc + leg.nodes_visited, 0)
+    const rota: RouteResponse = {
+      origin: legs[0].origin,
+      destination: legs[legs.length - 1].destination,
+      waypoints: legs.slice(1, -1).map((leg) => leg.origin),
+      algorithm,
+      distance_km: totalDistancia,
+      estimated_duration_minutes: totalDuracao,
+      nodes_visited: totalVisitados,
+      search_time_ms: 0,
+      geometry: geometria,
+      legs,
+      data_source: graphInfo?.data_source ?? 'OSM',
+    }
+    setResults((prev) => ({ ...(prev ?? {}), [altVehicleId]: rota }))
+    setVehicles((prev) =>
+      prev.map((v) =>
+        v.id === altVehicleId
+          ? { ...v, points: [rota.origin, ...rota.waypoints, rota.destination] }
+          : v,
+      ),
+    )
+    sairDasAlternativas()
+    setNotice('Rota montada com as alternativas escolhidas.')
+  }
+
+  const selecionarVeiculo = (id: string) => {
+    if (id !== activeVehicleId) {
+      sairDasAlternativas()
+    }
+    setActiveVehicleId(id)
+  }
+
   const handleClear = () => {
     const v = criarVeiculo(1)
     setVehicles([v])
@@ -149,6 +262,7 @@ function App() {
     setResults(null)
     setError(null)
     setNotice(null)
+    sairDasAlternativas()
   }
 
   const handleSave = async () => {
@@ -211,6 +325,8 @@ function App() {
       <RoutePanel
         algorithm={algorithm}
         onAlgorithmChange={setAlgorithm}
+        cost={cost}
+        onCostChange={setCost}
         vehicles={vehicles}
         activeVehicleId={activeVehicleId}
         results={results}
@@ -223,23 +339,31 @@ function App() {
         savedRoutes={savedRoutes}
         saveName={saveName}
         onSaveNameChange={setSaveName}
-        onSelectVehicle={setActiveVehicleId}
+        onSelectVehicle={selecionarVeiculo}
         onAddVehicle={addVehicle}
         onRemoveVehicle={removeVehicle}
         onUpdateLabel={updateLabel}
         onRemovePoint={removePoint}
         onCalculate={handleCalculate}
+        onAlternatives={handleAlternatives}
         onClear={handleClear}
         onSave={handleSave}
         onLoadSaved={loadSaved}
         onDeleteSaved={deleteSaved}
+        alt={alt}
+        onSelectAlternative={selectAlternative}
+        onApplyAlternatives={applyAlternatives}
+        onCancelAlternatives={sairDasAlternativas}
       />
       <RouteMap
         vehicles={vehicles}
         activeVehicleId={activeVehicleId}
         results={results}
+        alt={alt}
+        altVehicleId={altVehicleId}
         onMapClick={addPoint}
         onPointDrag={movePoint}
+        onSelectAlternative={selectAlternative}
       />
     </div>
   )
