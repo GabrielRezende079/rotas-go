@@ -37,18 +37,16 @@ body {
   height: 100%;
 }
 
-.map-marker-dot {
-  width: 18px;
-  height: 18px;
-  border: 3px solid #ffffff;
+.map-marker-number {
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border: 2px solid #ffffff;
   border-radius: 50%;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-}
-
-.map-marker-dot-origin {
-  background-color: #16a34a;
-}
-
-.map-marker-dot-destination {
-  background-color: #dc2626;
 }

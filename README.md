@@ -16,7 +16,7 @@ importador Go (paulmach/osm)
         ↓
 grafo direcionado compactado
         ↓
-API Gin → Dijkstra / A*
+API Gin → Dijkstra / A*  →  PostgreSQL (rotas salvas)
         ↓
 React + Leaflet
 ```
@@ -50,11 +50,20 @@ Os dados grandes ficam fora do Git e podem ser regenerados a qualquer momento.
 
 ## Executar
 
-Backend:
+Requisitos do banco (opcional): um PostgreSQL. As rotas salvas dependem dele; sem
+`DATABASE_URL` a API roda normalmente, apenas sem a persistência.
+
+```bash
+# PostgreSQL local via Docker (opcional)
+docker run -d --name rotas-go-pg -e POSTGRES_PASSWORD=rotas -e POSTGRES_DB=rotas \
+  -e POSTGRES_USER=rotas -p 5432:5432 postgres:16-alpine
+```
+
+Backend (as migrations são aplicadas sozinhas no `startup`):
 
 ```bash
 cd backend
-go run ./cmd
+DATABASE_URL=postgres://rotas:rotas@localhost:5432/rotas go run ./cmd
 ```
 
 Frontend:
@@ -75,24 +84,65 @@ outro cache:
 ROTAS_GRAPH_FILE=/caminho/grafo.gz go run ./cmd
 ```
 
+### Variáveis de ambiente
+
+| Variável | Padrão | Descrição |
+| --- | --- | --- |
+| `ROTAS_GRAPH_FILE` | `../data/es-road.graph.gz` | cache do grafo viário |
+| `DATABASE_URL` | vazio | string de conexão PostgreSQL; se ausente, rotas salvas ficam desabilitadas |
+| `PORT` | `8080` | porta do servidor HTTP |
+
 ## API
 
 - `GET /health`: disponibilidade do backend;
 - `GET /api/v1/info`: origem e tamanho do grafo carregado;
-- `POST /api/v1/route`: calcula uma rota com `dijkstra` ou `astar`.
+- `POST /api/v1/route`: calcula uma rota com `dijkstra` ou `astar`, incluindo
+  pontos de passagem (`waypoints`) opcionais entre origem e destino;
+- `POST /api/v1/routes`: calcula a rota de vários veículos de uma vez
+  (requisição em lote, executada em paralelo);
+- `POST /api/v1/routes/saved`: salva um lote de rotas calculado;
+- `GET /api/v1/routes/saved`: lista os resumos das rotas salvas;
+- `GET /api/v1/routes/saved/:id`: busca uma rota salva com o snapshot completo;
+- `DELETE /api/v1/routes/saved/:id`: exclui uma rota salva.
 
-Exemplo:
+Rota com pontos de passagem:
 
 ```json
 {
   "origin": { "lat": -20.3155, "lng": -40.3128 },
   "destination": { "lat": -20.3297, "lng": -40.2925 },
+  "waypoints": [{ "lat": -20.2635, "lng": -40.4166 }],
   "algorithm": "astar"
 }
 ```
 
 A resposta contém distância, duração estimada, nós visitados, tempo do
-algoritmo e todos os pontos da geometria percorrida.
+algoritmo, todos os pontos da geometria percorrida e a quebra por trecho
+(`legs`), além dos pontos ajustados (`origin`, `waypoints`, `destination`).
+
+Lote de veículos:
+
+```json
+{
+  "algorithm": "dijkstra",
+  "vehicles": [
+    {
+      "id": "v1",
+      "origin": { "lat": -20.3155, "lng": -40.3128 },
+      "destination": { "lat": -20.3297, "lng": -40.2925 }
+    },
+    {
+      "id": "v2",
+      "origin": { "lat": -19.539, "lng": -40.63 },
+      "destination": { "lat": -19.93, "lng": -40.407 },
+      "waypoints": [{ "lat": -20.1288, "lng": -40.3078 }]
+    }
+  ]
+}
+```
+
+A resposta traz uma entrada `routes` com a rota calculada de cada veículo,
+identificada pelo mesmo `id` enviado na requisição.
 
 ## Regras consideradas
 

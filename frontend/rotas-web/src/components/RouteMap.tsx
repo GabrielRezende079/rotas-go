@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import 'leaflet/dist/leaflet.css'
 import * as L from 'leaflet'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
@@ -12,7 +12,7 @@ import {
   useMap,
   useMapEvents,
 } from 'react-leaflet'
-import type { LatLng, RouteResponse } from '../types'
+import type { LatLng, RouteResponse, VehicleRoute } from '../types'
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
@@ -20,81 +20,100 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 })
 
-const originIcon = L.divIcon({
-  className: '',
-  html: '<div class="map-marker-dot map-marker-dot-origin"></div>',
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
-})
+const CORES = [
+  '#2563eb',
+  '#7c3aed',
+  '#059669',
+  '#ea580c',
+  '#0d9488',
+  '#be123c',
+  '#4f46e5',
+  '#ca8a04',
+]
 
-const destinationIcon = L.divIcon({
-  className: '',
-  html: '<div class="map-marker-dot map-marker-dot-destination"></div>',
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
-})
+const COR_ORIGEM = '#16a34a'
+const COR_PARADA = '#f59e0b'
+const COR_DESTINO = '#dc2626'
 
-interface MapClickHandlerProps {
-  origin: LatLng | null
-  destination: LatLng | null
-  onOriginChange: (origin: LatLng) => void
-  onDestinationChange: (destination: LatLng) => void
-  onClear: () => void
+// iconoNumerado cria um marcador circular com o número da parada dentro.
+function iconoNumerado(numero: number, cor: string) {
+  return L.divIcon({
+    className: '',
+    html: `<div class="map-marker-number" style="background-color:${cor}">${numero}</div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  })
 }
 
-function MapClickHandler({
-  origin,
-  destination,
-  onOriginChange,
-  onDestinationChange,
-  onClear,
-}: MapClickHandlerProps) {
+function corDoPonto(index: number, total: number): string {
+  if (index === 0) return COR_ORIGEM
+  if (index === total - 1) return COR_DESTINO
+  return COR_PARADA
+}
+
+interface MapClickHandlerProps {
+  onMapClick: (position: LatLng) => void
+}
+
+function MapClickHandler({ onMapClick }: MapClickHandlerProps) {
   useMapEvents({
     click: (event) => {
-      const position: LatLng = { lat: event.latlng.lat, lng: event.latlng.lng }
-      if (origin === null) {
-        onOriginChange(position)
-      } else if (destination === null) {
-        onDestinationChange(position)
-      } else {
-        onClear()
-        onOriginChange(position)
-      }
+      onMapClick({ lat: event.latlng.lat, lng: event.latlng.lng })
     },
   })
   return null
 }
 
-function FitRoute({ geometry }: { geometry: LatLng[] }) {
+function FitRoute({ geometries }: { geometries: LatLng[][] }) {
   const map = useMap()
   useEffect(() => {
-    if (geometry.length > 1) {
-      map.fitBounds(
-        geometry.map((point) => [point.lat, point.lng] as [number, number]),
-        { padding: [32, 32] },
-      )
+    const pontos: [number, number][] = []
+    for (const geometry of geometries) {
+      for (const ponto of geometry) {
+        pontos.push([ponto.lat, ponto.lng])
+      }
     }
-  }, [geometry, map])
+    if (pontos.length > 1) {
+      map.fitBounds(pontos, { padding: [32, 32] })
+    }
+  }, [geometries, map])
   return null
 }
 
 interface RouteMapProps {
-  origin: LatLng | null
-  destination: LatLng | null
-  response: RouteResponse | null
-  onOriginChange: (origin: LatLng) => void
-  onDestinationChange: (destination: LatLng) => void
-  onClear: () => void
+  vehicles: VehicleRoute[]
+  activeVehicleId: string | null
+  results: Record<string, RouteResponse> | null
+  onMapClick: (position: LatLng) => void
+  onPointDrag: (vehicleId: string, index: number, position: LatLng) => void
 }
 
 function RouteMap({
-  origin,
-  destination,
-  response,
-  onOriginChange,
-  onDestinationChange,
-  onClear,
+  vehicles,
+  activeVehicleId,
+  results,
+  onMapClick,
+  onPointDrag,
 }: RouteMapProps) {
+  const ativo = vehicles.find((v) => v.id === activeVehicleId) ?? null
+
+  const geometries = useMemo(() => {
+    if (results === null) return []
+    const lista: LatLng[][] = []
+    for (const vehicle of vehicles) {
+      const resultado = results[vehicle.id]
+      if (resultado === undefined) continue
+      if (resultado.legs.length > 0) {
+        for (const leg of resultado.legs) {
+          if (leg.geometry.length > 0) lista.push(leg.geometry)
+        }
+      } else if (resultado.geometry.length > 0) {
+        lista.push(resultado.geometry)
+      }
+    }
+    return lista
+  }, [results, vehicles])
+
   return (
     <div className="map-container">
       <MapContainer center={[-19.6, -40.65]} zoom={8}>
@@ -102,48 +121,42 @@ function RouteMap({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <MapClickHandler
-          origin={origin}
-          destination={destination}
-          onOriginChange={onOriginChange}
-          onDestinationChange={onDestinationChange}
-          onClear={onClear}
-        />
-        {origin !== null && (
-          <Marker
-            position={[origin.lat, origin.lng]}
-            icon={originIcon}
-            draggable
-            eventHandlers={{
-              dragend: (event) => {
-                const position = event.target.getLatLng()
-                onOriginChange({ lat: position.lat, lng: position.lng })
-              },
-            }}
-          />
-        )}
-        {destination !== null && (
-          <Marker
-            position={[destination.lat, destination.lng]}
-            icon={destinationIcon}
-            draggable
-            eventHandlers={{
-              dragend: (event) => {
-                const position = event.target.getLatLng()
-                onDestinationChange({ lat: position.lat, lng: position.lng })
-              },
-            }}
-          />
-        )}
-        {response !== null && (
-          <>
+        <MapClickHandler onMapClick={onMapClick} />
+        {vehicles.map((vehicle, vehicleIndex) => {
+          const resultado = results?.[vehicle.id]
+          if (resultado === undefined) return null
+          if (resultado.legs.length > 0) {
+            return resultado.legs.map((leg, legIndex) => (
+              <Polyline
+                key={`${vehicle.id}-leg-${legIndex}`}
+                positions={leg.geometry.map((point) => [point.lat, point.lng])}
+                pathOptions={{ color: CORES[(vehicleIndex + legIndex) % CORES.length], weight: 5 }}
+              />
+            ))
+          }
+          return (
             <Polyline
-              positions={response.geometry.map((point) => [point.lat, point.lng])}
-              pathOptions={{ color: '#2563eb', weight: 5 }}
+              key={`${vehicle.id}-route`}
+              positions={resultado.geometry.map((point) => [point.lat, point.lng])}
+              pathOptions={{ color: CORES[vehicleIndex % CORES.length], weight: 5 }}
             />
-            <FitRoute geometry={response.geometry} />
-          </>
-        )}
+          )
+        })}
+        {ativo?.points.map((point, index) => (
+          <Marker
+            key={`${ativo.id}-${index}`}
+            position={[point.lat, point.lng]}
+            icon={iconoNumerado(index + 1, corDoPonto(index, ativo.points.length))}
+            draggable
+            eventHandlers={{
+              dragend: (event) => {
+                const position = event.target.getLatLng()
+                onPointDrag(ativo.id, index, { lat: position.lat, lng: position.lng })
+              },
+            }}
+          />
+        ))}
+        <FitRoute geometries={geometries} />
       </MapContainer>
     </div>
   )

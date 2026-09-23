@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"rotas-go/internal/grafo"
+	"rotas-go/internal/storage"
 	"rotas-go/routes"
 )
 
@@ -23,7 +25,16 @@ func main() {
 		meta.GeradoEm.Format(time.RFC3339),
 	)
 
-	service := routes.NewRouteService(g)
+	var store routes.SavedRouteStore
+	if url := os.Getenv("DATABASE_URL"); url != "" {
+		pg := inicializarArmazenamento(url)
+		defer pg.Close()
+		store = pg
+	} else {
+		log.Println("DATABASE_URL não definida; rotas salvas desabilitadas")
+	}
+
+	service := routes.NewRouteService(g, store)
 	controller := routes.NewRouteController(service)
 	engine := gin.Default()
 	_ = engine.SetTrustedProxies(nil)
@@ -35,10 +46,36 @@ func main() {
 	api := engine.Group("/api/v1")
 	api.GET("/info", controller.Info)
 	api.POST("/route", controller.CalcularRota)
+	api.POST("/routes", controller.CalcularLote)
+	api.POST("/routes/saved", controller.SalvarRota)
+	api.GET("/routes/saved", controller.ListarRotasSalvas)
+	api.GET("/routes/saved/:id", controller.BuscarRotaSalva)
+	api.DELETE("/routes/saved/:id", controller.ExcluirRotaSalva)
 
-	if err := engine.Run(":8080"); err != nil {
+	if err := engine.Run(":" + porta()); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func inicializarArmazenamento(url string) *storage.PostgresStore {
+	ctx := context.Background()
+	pg, err := storage.NovoPostgresStore(ctx, url)
+	if err != nil {
+		log.Fatalf("DATABASE_URL inválida: %v", err)
+	}
+	if err := pg.Migrar(ctx); err != nil {
+		pg.Close()
+		log.Fatalf("migração do banco falhou: %v", err)
+	}
+	log.Println("persistência PostgreSQL habilitada (rotas salvas)")
+	return pg
+}
+
+func porta() string {
+	if p := os.Getenv("PORT"); p != "" {
+		return p
+	}
+	return "8080"
 }
 
 func carregarGrafo() *grafo.Grafo {

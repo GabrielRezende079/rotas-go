@@ -1,4 +1,12 @@
-import type { GraphInfo, RouteRequest, RouteResponse } from '../types'
+import type {
+  BatchRouteRequest,
+  BatchRouteResponse,
+  GraphInfo,
+  RouteRequest,
+  RouteResponse,
+  SavedRouteDetail,
+  SavedRouteSummary,
+} from '../types'
 
 const BASE_URL = '/api/v1'
 
@@ -24,21 +32,63 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return data as T
 }
 
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  let response: Response
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch {
+    throw new Error('Não foi possível conectar ao servidor. Verifique se o backend está rodando.')
+  }
+  return handleResponse<T>(response)
+}
+
 export async function getGraphInfo(): Promise<GraphInfo> {
   const response = await fetch(`${BASE_URL}/info`)
   return handleResponse<GraphInfo>(response)
 }
 
 export async function calculateRoute(req: RouteRequest): Promise<RouteResponse> {
+  return postJson<RouteResponse>('/route', req)
+}
+
+export async function calculateBatch(req: BatchRouteRequest): Promise<BatchRouteResponse> {
+  return postJson<BatchRouteResponse>('/routes', req)
+}
+
+export async function saveRoute(req: {
+  name: string
+  algorithm: RouteRequest['algorithm']
+  routes: BatchRouteResponse['routes']
+}): Promise<SavedRouteSummary> {
+  return postJson<SavedRouteSummary>('/routes/saved', req)
+}
+
+export async function listSavedRoutes(): Promise<SavedRouteSummary[]> {
+  const response = await fetch(`${BASE_URL}/routes/saved`)
+  return handleResponse<SavedRouteSummary[]>(response)
+}
+
+export async function getSavedRoute(id: number): Promise<SavedRouteDetail> {
+  const response = await fetch(`${BASE_URL}/routes/saved/${id}`)
+  return handleResponse<SavedRouteDetail>(response)
+}
+
+export async function deleteSavedRoute(id: number): Promise<void> {
   let response: Response
   try {
-    response = await fetch(`${BASE_URL}/route`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
-    })
+    response = await fetch(`${BASE_URL}/routes/saved/${id}`, { method: 'DELETE' })
   } catch {
     throw new Error('Não foi possível conectar ao servidor. Verifique se o backend está rodando.')
   }
-  return handleResponse<RouteResponse>(response)
+  if (!response.ok) {
+    const data = await readJson(response)
+    if (data !== null && typeof data === 'object' && 'error' in data) {
+      throw new Error(String(data.error))
+    }
+    throw new Error(`Erro HTTP ${response.status}`)
+  }
 }
