@@ -35,9 +35,9 @@ func (ct *SavedRouteController) SalvarRota(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// ListarRotasSalvas trata GET /api/v1/routes/saved.
+// ListarRotasSalvas trata GET /api/v1/routes/saved?q=&limit=&offset=.
 func (ct *SavedRouteController) ListarRotasSalvas(c *gin.Context) {
-	resp, err := ct.service.ListarRotasSalvas(c.Request.Context())
+	resp, err := ct.service.ListarRotasSalvas(c.Request.Context(), consultaLista(c))
 	if err != nil {
 		responderErro(c, err)
 		return

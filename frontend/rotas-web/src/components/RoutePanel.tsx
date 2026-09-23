@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type {
   Algorithm,
   Base,
@@ -7,8 +8,10 @@ import type {
   SavedRouteSummary,
   VehicleRoute,
 } from '../types'
+import type { ListaPagina } from '../lista'
 import { CORES_VEICULO } from '../colors'
 import AltStepper, { type AltState } from './AltStepper'
+import ListaColapsavel from './ListaColapsavel'
 
 interface RoutePanelProps {
   algorithm: Algorithm
@@ -19,7 +22,8 @@ interface RoutePanelProps {
   activeVehicleId: string | null
   results: Record<string, RouteResponse> | null
   graphInfo: GraphInfo | null
-  savedRoutes: SavedRouteSummary[]
+  basesLista: ListaPagina<Base>
+  salvasLista: ListaPagina<SavedRouteSummary>
   alt: AltState
   onSelectVehicle: (id: string) => void
   onAddVehicle: () => void
@@ -31,7 +35,6 @@ interface RoutePanelProps {
   onCancelAlternatives: () => void
   onLoadSaved: (id: number) => void
   onDeleteSaved: (saved: SavedRouteSummary) => void
-  bases: Base[]
   addingBase: boolean
   onStartAddBase: () => void
   onSelectBase: (base: Base) => void
@@ -57,7 +60,8 @@ function RoutePanel({
   activeVehicleId,
   results,
   graphInfo,
-  savedRoutes,
+  basesLista,
+  salvasLista,
   alt,
   onSelectVehicle,
   onAddVehicle,
@@ -69,12 +73,13 @@ function RoutePanel({
   onCancelAlternatives,
   onLoadSaved,
   onDeleteSaved,
-  bases,
   addingBase,
   onStartAddBase,
   onSelectBase,
   onDeleteBase,
 }: RoutePanelProps) {
+  const [basesAbertas, setBasesAbertas] = useState(true)
+  const [salvasAbertas, setSalvasAbertas] = useState(true)
   const ativo = vehicles.find((v) => v.id === activeVehicleId) ?? null
   const resultados = results !== null ? Object.values(results) : []
   const totalKm = resultados.reduce((acc, r) => acc + r.distance_km, 0)
@@ -215,9 +220,12 @@ function RoutePanel({
           onCancel={onCancelAlternatives}
         />
 
-        <section className="bases-section">
-          <div className="section-title">
-            <label>Bases</label>
+        <ListaColapsavel<Base>
+          titulo="Bases"
+          dados={basesLista}
+          aberto={basesAbertas}
+          onToggle={() => setBasesAbertas((aberta) => !aberta)}
+          acao={
             <button
               type="button"
               className="button button-small button-secondary"
@@ -226,83 +234,75 @@ function RoutePanel({
             >
               <span className="button-plus">+</span> Adicionar
             </button>
-          </div>
-          {addingBase ? (
-            <p className="hint">Modo de posicionamento ativo: clique no mapa.</p>
-          ) : bases.length === 0 ? (
-            <p className="hint">Nenhuma base cadastrada.</p>
-          ) : (
-            <ul className="bases-list">
-              {bases.map((base) => (
-                <li key={base.id} className="saved-card">
-                  <div className="saved-info">
-                    <strong>{base.name}</strong>
-                    <span>
-                      {base.lat.toFixed(4)}, {base.lng.toFixed(4)}
-                    </span>
-                  </div>
-                  <div className="saved-actions">
-                    <button
-                      type="button"
-                      className="button button-small button-soft"
-                      title="Adiciona a base como próximo ponto do veículo ativo"
-                      onClick={() => onSelectBase(base)}
-                    >
-                      + Rota
-                    </button>
-                    <button
-                      type="button"
-                      className="button button-small button-secondary"
-                      onClick={() => onDeleteBase(base)}
-                    >
-                      Excluir
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+          }
+          vazio="Nenhuma base cadastrada."
+          itemKey={(base) => base.id}
+          renderItem={(base) => (
+            <div className="saved-card">
+              <div className="saved-info">
+                <strong>{base.name}</strong>
+                <span>
+                  {base.lat.toFixed(4)}, {base.lng.toFixed(4)}
+                </span>
+              </div>
+              <div className="saved-actions">
+                <button
+                  type="button"
+                  className="button button-small button-soft"
+                  title="Adiciona a base como próximo ponto do veículo ativo"
+                  onClick={() => onSelectBase(base)}
+                >
+                  + Rota
+                </button>
+                <button
+                  type="button"
+                  className="button button-small button-secondary"
+                  onClick={() => onDeleteBase(base)}
+                >
+                  Excluir
+                </button>
+              </div>
+            </div>
           )}
-        </section>
+        />
+        {addingBase && <p className="hint">Modo de posicionamento ativo: clique no mapa.</p>}
 
-        <section className="saved-section">
-          <div className="section-title">
-            <label>Rotas salvas</label>
-          </div>
-          {savedRoutes.length === 0 ? (
-            <p className="hint">Nenhuma rota salva ainda.</p>
-          ) : (
-            <ul className="saved-list">
-              {savedRoutes.map((saved) => (
-                <li key={saved.id} className="saved-card">
-                  <div className="saved-info">
-                    <strong>{saved.name}</strong>
-                    <span>
-                      {saved.vehicle_count} {saved.vehicle_count === 1 ? 'veículo' : 'veículos'} ·{' '}
-                      {saved.total_distance_km.toFixed(1)} km
-                    </span>
-                    <span>{new Date(saved.created_at).toLocaleString('pt-BR')}</span>
-                  </div>
-                  <div className="saved-actions">
-                    <button
-                      type="button"
-                      className="button button-small button-soft"
-                      onClick={() => onLoadSaved(saved.id)}
-                    >
-                      Carregar
-                    </button>
-                    <button
-                      type="button"
-                      className="button button-small button-secondary"
-                      onClick={() => onDeleteSaved(saved)}
-                    >
-                      Excluir
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+        <ListaColapsavel<SavedRouteSummary>
+          titulo="Rotas salvas"
+          dados={salvasLista}
+          aberto={salvasAbertas}
+          onToggle={() => setSalvasAbertas((aberta) => !aberta)}
+          vazio="Nenhuma rota salva ainda."
+          itemKey={(saved) => saved.id}
+          renderItem={(saved) => (
+            <div className="saved-card">
+              <div className="saved-info">
+                <strong>{saved.name}</strong>
+                <span>
+                  {saved.vehicle_count} {saved.vehicle_count === 1 ? 'veículo' : 'veículos'} ·{' '}
+                  {saved.total_distance_km.toFixed(1)} km
+                </span>
+                <span>{new Date(saved.created_at).toLocaleString('pt-BR')}</span>
+              </div>
+              <div className="saved-actions">
+                <button
+                  type="button"
+                  className="button button-small button-soft"
+                  onClick={() => onLoadSaved(saved.id)}
+                >
+                  Carregar
+                </button>
+                <button
+                  type="button"
+                  className="button button-small button-secondary"
+                  onClick={() => onDeleteSaved(saved)}
+                >
+                  Excluir
+                </button>
+              </div>
+            </div>
           )}
-        </section>
+        />
       </div>
 
       <footer className="sidebar-footer">

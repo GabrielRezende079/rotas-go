@@ -35,14 +35,14 @@ func (ct *BaseController) CriarBase(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// ListarBases trata GET /api/v1/bases.
+// ListarBases trata GET /api/v1/bases?q=&limit=&offset=.
 func (ct *BaseController) ListarBases(c *gin.Context) {
-	resp, err := ct.service.ListarBases(c.Request.Context())
+	resp, err := ct.service.ListarBases(c.Request.Context(), consultaLista(c))
 	if err != nil {
 		responderErro(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, dtos.BasesResponse{Bases: resp})
+	c.JSON(http.StatusOK, resp)
 }
 
 // ExcluirBase trata DELETE /api/v1/bases/:id.

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"rotas-go/internal/api/dtos"
+	"rotas-go/internal/storage"
 )
 
 func TestSalvarRotaSemPersistenciaRetorna503(t *testing.T) {
@@ -39,5 +40,25 @@ func TestSalvarRotaUsaStoreFornecido(t *testing.T) {
 	}
 	if store.ultimoNome != "entrega norte" || store.ultimoAlgoritmo != "astar" {
 		t.Fatalf("store chamado com valores errados: %q %q", store.ultimoNome, store.ultimoAlgoritmo)
+	}
+}
+
+func TestListarRotasSalvasRetornaEnvelopePaginado(t *testing.T) {
+	service := NewSavedRouteService(&storeFake{})
+	page, err := service.ListarRotasSalvas(context.Background(), storage.ListaFiltro{Termo: "norte", Limite: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 0 || len(page.Items) != 0 || page.Limite != 7 || page.Offset != 0 {
+		t.Fatalf("envelope paginado incorreto: %+v", page)
+	}
+}
+
+func TestListarRotasSalvasSemStoreRetorna503(t *testing.T) {
+	service := NewSavedRouteService(nil)
+	_, err := service.ListarRotasSalvas(context.Background(), storage.ListaFiltro{Limite: 7})
+	var httpErr ErroRequisicao
+	if !errors.As(err, &httpErr) || httpErr.Codigo != http.StatusServiceUnavailable {
+		t.Fatalf("esperava 503, obtido %v", err)
 	}
 }

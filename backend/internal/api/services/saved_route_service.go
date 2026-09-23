@@ -17,7 +17,7 @@ import (
 // vive em rotas-go/internal/storage.
 type SavedRouteStorage interface {
 	Salvar(ctx context.Context, nome, algoritmo string, veiculos int, distanciaKm, duracaoMin float64, dados []byte) (storage.RotaSalva, error)
-	Listar(ctx context.Context) ([]storage.RotaSalva, error)
+	Listar(ctx context.Context, f storage.ListaFiltro) ([]storage.RotaSalva, int, error)
 	Buscar(ctx context.Context, id int64) (storage.RotaSalva, error)
 	Excluir(ctx context.Context, id int64) error
 }
@@ -66,20 +66,21 @@ func (s *SavedRouteService) SalvarRota(ctx context.Context, req dtos.SalvarRotaR
 	return resumoDeRotaSalva(salva), nil
 }
 
-// ListarRotasSalvas devolve o resumo de todas as rotas salvas.
-func (s *SavedRouteService) ListarRotasSalvas(ctx context.Context) ([]dtos.RotaSalvaSummary, error) {
+// ListarRotasSalvas devolve uma página de resumos, com filtragem por nome.
+func (s *SavedRouteService) ListarRotasSalvas(ctx context.Context, f storage.ListaFiltro) (dtos.RotasSalvasResponse, error) {
 	if s.store == nil {
-		return nil, semPersistencia()
+		return dtos.RotasSalvasResponse{}, semPersistencia()
 	}
-	lista, err := s.store.Listar(ctx)
+	f = normalizarFiltro(f)
+	lista, total, err := s.store.Listar(ctx, f)
 	if err != nil {
-		return nil, err
+		return dtos.RotasSalvasResponse{}, err
 	}
 	resumo := make([]dtos.RotaSalvaSummary, 0, len(lista))
 	for _, r := range lista {
 		resumo = append(resumo, resumoDeRotaSalva(r))
 	}
-	return resumo, nil
+	return dtos.RotasSalvasResponse{Items: resumo, Total: total, Limite: f.Limite, Offset: f.Offset}, nil
 }
 
 // BuscarRotaSalva devolve o snapshot completo de uma rota salva.

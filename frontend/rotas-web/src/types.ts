@@ -126,6 +126,13 @@ export interface Base {
   created_at: string
 }
 
+export interface PaginaLista<T> {
+  items: T[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export type CategoriaVeiculo = 'Carro' | 'Caminhão' | 'Caminhonete' | 'Furgão'
 
 export type StatusVeiculo = 'Disponível' | 'Indisponível' | 'Em uso' | 'Em Manutenção'

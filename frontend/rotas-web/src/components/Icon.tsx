@@ -16,6 +16,7 @@ export type IconName =
   | 'clear'
   | 'base'
   | 'zap'
+  | 'chevron'
 
 interface IconProps {
   name: IconName
@@ -105,6 +106,7 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   zap: <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" />,
+  chevron: <path d="M6 9l6 6 6-6" />,
 }
 
 export function Icon({ name, size = 18, className }: IconProps) {

@@ -35,26 +35,33 @@ func (s *PostgresStore) Salvar(ctx context.Context, nome, algoritmo string, veic
 	return rs, err
 }
 
-// Listar devolve os resumos das rotas salvas, da mais recente para a mais antiga.
-func (s *PostgresStore) Listar(ctx context.Context) ([]RotaSalva, error) {
+// Listar devolve uma página de resumos das rotas salvas,
+// da mais recente para a mais antiga. O termo filtra por nome;
+// o total é o nº de registros que casam com o filtro.
+func (s *PostgresStore) Listar(ctx context.Context, f ListaFiltro) ([]RotaSalva, int, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, name, algorithm, created_at, vehicle_count, total_distance_km, total_duration_minutes
+		SELECT id, name, algorithm, created_at, vehicle_count, total_distance_km, total_duration_minutes, count(*) OVER()::int AS total
 		FROM saved_routes
-		ORDER BY created_at DESC`)
+		WHERE name ILIKE '%' || $1 || '%'
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3`,
+		f.Termo, f.Limite, f.Offset,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("listar rotas salvas: %w", err)
+		return nil, 0, fmt.Errorf("listar rotas salvas: %w", err)
 	}
 	defer rows.Close()
 
 	lista := make([]RotaSalva, 0)
+	total := 0
 	for rows.Next() {
 		var rs RotaSalva
-		if err := rows.Scan(&rs.ID, &rs.Nome, &rs.Algoritmo, &rs.CriadaEm, &rs.Veiculos, &rs.DistanciaKm, &rs.DuracaoMin); err != nil {
-			return nil, fmt.Errorf("ler rota salva: %w", err)
+		if err := rows.Scan(&rs.ID, &rs.Nome, &rs.Algoritmo, &rs.CriadaEm, &rs.Veiculos, &rs.DistanciaKm, &rs.DuracaoMin, &total); err != nil {
+			return nil, 0, fmt.Errorf("ler rota salva: %w", err)
 		}
 		lista = append(lista, rs)
 	}
-	return lista, rows.Err()
+	return lista, total, rows.Err()
 }
 
 // Buscar devolve a rota salva com o snapshot completo.

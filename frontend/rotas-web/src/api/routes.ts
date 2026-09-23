@@ -5,6 +5,7 @@ import type {
   BatchRouteRequest,
   BatchRouteResponse,
   GraphInfo,
+  PaginaLista,
   RouteRequest,
   RouteResponse,
   SavedRouteDetail,
@@ -76,9 +77,14 @@ export async function saveRoute(req: {
   return postJson<SavedRouteSummary>('/routes/saved', req)
 }
 
-export async function listSavedRoutes(): Promise<SavedRouteSummary[]> {
-  const response = await fetch(`${BASE_URL}/routes/saved`)
-  return handleResponse<SavedRouteSummary[]>(response)
+export async function listSavedRoutes(
+  termo = '',
+  limite = 20,
+  offset = 0,
+): Promise<PaginaLista<SavedRouteSummary>> {
+  const params = new URLSearchParams({ q: termo, limit: String(limite), offset: String(offset) })
+  const response = await fetch(`${BASE_URL}/routes/saved?${params}`)
+  return handleResponse<PaginaLista<SavedRouteSummary>>(response)
 }
 
 export async function getSavedRoute(id: number): Promise<SavedRouteDetail> {
@@ -106,10 +112,14 @@ export async function createBase(req: { name: string; lat: number; lng: number }
   return postJson<Base>('/bases', req)
 }
 
-export async function listBases(): Promise<Base[]> {
-  const response = await fetch(`${BASE_URL}/bases`)
-  const data = await handleResponse<{ bases: Base[] }>(response)
-  return data.bases
+export async function listBases(
+  termo = '',
+  limite = 20,
+  offset = 0,
+): Promise<PaginaLista<Base>> {
+  const params = new URLSearchParams({ q: termo, limit: String(limite), offset: String(offset) })
+  const response = await fetch(`${BASE_URL}/bases?${params}`)
+  return handleResponse<PaginaLista<Base>>(response)
 }
 
 export async function deleteBase(id: number): Promise<void> {

@@ -12,6 +12,7 @@ import {
   listSavedRoutes,
   saveRoute,
 } from './api/routes'
+import { useListaPaginada } from './lista'
 import RouteMap from './components/RouteMap'
 import RoutePanel from './components/RoutePanel'
 import VehiclesView from './components/VehiclesView'
@@ -69,15 +70,16 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<Record<string, RouteResponse> | null>(null)
   const [graphInfo, setGraphInfo] = useState<GraphInfo | null>(null)
-  const [savedRoutes, setSavedRoutes] = useState<SavedRouteSummary[]>([])
   const [saveName, setSaveName] = useState('')
   const [alt, setAlt] = useState<AltState>(alternativasIniciais)
   const [altVehicleId, setAltVehicleId] = useState<string | null>(null)
-  const [bases, setBases] = useState<Base[]>([])
   const [addingBase, setAddingBase] = useState(false)
   const [baseName, setBaseName] = useState('')
   const [view, setView] = useState<Visao>('rotas')
   const [veiculosCadastrados, setVeiculosCadastrados] = useState<Veiculo[]>([])
+
+  const basesLista = useListaPaginada<Base>(listBases)
+  const salvasLista = useListaPaginada<SavedRouteSummary>(listSavedRoutes)
 
   const [salvarAberta, setSalvarAberta] = useState(false)
   const [ajudaAberta, setAjudaAberta] = useState(false)
@@ -90,8 +92,6 @@ function App() {
 
   useEffect(() => {
     getGraphInfo().then(setGraphInfo).catch(() => setGraphInfo(null))
-    listSavedRoutes().then(setSavedRoutes).catch(() => setSavedRoutes([]))
-    listBases().then(setBases).catch(() => setBases([]))
     listVehicles().then(setVeiculosCadastrados).catch(() => setVeiculosCadastrados([]))
   }, [])
 
@@ -302,7 +302,7 @@ function App() {
           lat: position.lat,
           lng: position.lng,
         })
-        setBases((prev) => [...prev, base].sort((a, b) => a.name.localeCompare(b.name)))
+        basesLista.atualizar()
         toasts.success(`Base "${base.name}" criada.`)
         cancelAddBase()
       } catch (err) {
@@ -336,7 +336,7 @@ function App() {
       confirmarLabel: 'Excluir',
       executar: async () => {
         await deleteBase(base.id)
-        setBases((prev) => prev.filter((b) => b.id !== base.id))
+        basesLista.atualizar()
         toasts.success('Base excluída.')
       },
     })
@@ -370,7 +370,7 @@ function App() {
       confirmarLabel: 'Excluir',
       executar: async () => {
         await deleteSavedRoute(saved.id)
-        setSavedRoutes((prev) => prev.filter((r) => r.id !== saved.id))
+        salvasLista.atualizar()
         toasts.success('Rota salva excluída.')
       },
     })
@@ -433,7 +433,7 @@ function App() {
     if (results === null) throw new Error('Calcule as rotas antes de salvar.')
     const rotas = Object.entries(results).map(([id, rota]) => ({ ...rota, id }))
     await saveRoute({ name: nome, algorithm, routes: rotas })
-    setSavedRoutes(await listSavedRoutes())
+    salvasLista.atualizar()
   }
 
   const loadSaved = async (id: number) => {
@@ -655,7 +655,8 @@ function App() {
               activeVehicleId={activeVehicleId}
               results={results}
               graphInfo={graphInfo}
-              savedRoutes={savedRoutes}
+              basesLista={basesLista}
+              salvasLista={salvasLista}
               alt={alt}
               onSelectVehicle={selecionarVeiculo}
               onAddVehicle={addVehicle}
@@ -667,7 +668,6 @@ function App() {
               onCancelAlternatives={sairDasAlternativas}
               onLoadSaved={loadSaved}
               onDeleteSaved={pedirExclusaoDeRotaSalva}
-              bases={bases}
               addingBase={addingBase}
               onStartAddBase={() => setNomearBaseAberto(true)}
               onSelectBase={selectBaseAsPoint}
@@ -679,7 +679,7 @@ function App() {
               results={results}
               alt={alt}
               altVehicleId={altVehicleId}
-              bases={bases}
+              bases={basesLista.itens}
               loading={loading}
               addingBase={addingBase}
               baseName={baseName}

@@ -29,3 +29,11 @@ type RotaSalvaDetalhe struct {
 	RotaSalvaSummary
 	Rotas json.RawMessage `json:"routes"`
 }
+
+// RotasSalvasResponse é a resposta paginada de GET /api/v1/routes/saved.
+type RotasSalvasResponse struct {
+	Items  []RotaSalvaSummary `json:"items"`
+	Total  int                `json:"total"`
+	Limite int                `json:"limit"`
+	Offset int                `json:"offset"`
+}

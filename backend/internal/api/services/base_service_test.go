@@ -3,10 +3,12 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 
 	"rotas-go/internal/api/dtos"
+	"rotas-go/internal/storage"
 )
 
 func TestCriarListarExcluirBaseUsaStore(t *testing.T) {
@@ -25,11 +27,11 @@ func TestCriarListarExcluirBaseUsaStore(t *testing.T) {
 		t.Fatalf("base criada incorreta: %+v", base)
 	}
 
-	lista, err := service.ListarBases(context.Background())
+	lista, err := service.ListarBases(context.Background(), storage.ListaFiltro{Limite: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lista) != 1 || lista[0].Nome != "Depósito Centro" {
+	if len(lista.Items) != 1 || lista.Items[0].Nome != "Depósito Centro" || lista.Total != 1 {
 		t.Fatalf("listagem de bases incorreta: %+v", lista)
 	}
 
@@ -67,5 +69,47 @@ func TestExcluirBaseInexistenteRetorna404(t *testing.T) {
 	var httpErr ErroRequisicao
 	if !errors.As(err, &httpErr) || httpErr.Codigo != http.StatusNotFound {
 		t.Fatalf("esperava 404, obtido %v", err)
+	}
+}
+
+func TestListarBasesRetornaEnvelopePaginado(t *testing.T) {
+	store := &storeFake{}
+	service := NewBaseService(store)
+	for i := 0; i < 3; i++ {
+		if _, err := service.CriarBase(context.Background(), dtos.CriarBaseRequest{
+			Nome: fmt.Sprintf("Depósito %d", i), Lat: -20, Lng: -40,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := service.ListarBases(context.Background(), storage.ListaFiltro{Termo: "Depósito", Limite: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 3 || len(page.Items) != 3 || page.Limite != 7 || page.Offset != 0 {
+		t.Fatalf("envelope paginado incorreto: %+v", page)
+	}
+	if page.Items[0].Nome != "Depósito 0" {
+		t.Fatalf("ordem alfabética esperada, obtido %s", page.Items[0].Nome)
+	}
+}
+
+func TestListarBasesNormalizaFiltro(t *testing.T) {
+	service := NewBaseService(&storeFake{})
+	page, err := service.ListarBases(context.Background(), storage.ListaFiltro{Limite: 999, Offset: -3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Limite != 50 || page.Offset != 0 {
+		t.Fatalf("filtro não normalizado: limite=%d offset=%d", page.Limite, page.Offset)
+	}
+}
+
+func TestListarBasesSemStoreRetorna503(t *testing.T) {
+	service := NewBaseService(nil)
+	_, err := service.ListarBases(context.Background(), storage.ListaFiltro{Limite: 7})
+	var httpErr ErroRequisicao
+	if !errors.As(err, &httpErr) || httpErr.Codigo != http.StatusServiceUnavailable {
+		t.Fatalf("esperava 503, obtido %v", err)
 	}
 }

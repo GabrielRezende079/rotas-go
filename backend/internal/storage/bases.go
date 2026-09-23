@@ -27,26 +27,32 @@ func (s *PostgresStore) CriarBase(ctx context.Context, nome string, lat, lng flo
 	return b, err
 }
 
-// ListarBases devolve as bases em ordem alfabética pelo nome.
-func (s *PostgresStore) ListarBases(ctx context.Context) ([]Base, error) {
+// ListarBases devolve uma página de bases em ordem alfabética pelo nome.
+// O termo filtra por nome (ILIQUAL); o total é o nº de registros que casam.
+func (s *PostgresStore) ListarBases(ctx context.Context, f ListaFiltro) ([]Base, int, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, name, lat, lng, created_at
+		SELECT id, name, lat, lng, created_at, count(*) OVER()::int AS total
 		FROM bases
-		ORDER BY name ASC`)
+		WHERE name ILIKE '%' || $1 || '%'
+		ORDER BY name ASC
+		LIMIT $2 OFFSET $3`,
+		f.Termo, f.Limite, f.Offset,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("listar bases: %w", err)
+		return nil, 0, fmt.Errorf("listar bases: %w", err)
 	}
 	defer rows.Close()
 
 	lista := make([]Base, 0)
+	total := 0
 	for rows.Next() {
 		var b Base
-		if err := rows.Scan(&b.ID, &b.Nome, &b.Lat, &b.Lng, &b.CriadaEm); err != nil {
-			return nil, fmt.Errorf("ler base: %w", err)
+		if err := rows.Scan(&b.ID, &b.Nome, &b.Lat, &b.Lng, &b.CriadaEm, &total); err != nil {
+			return nil, 0, fmt.Errorf("ler base: %w", err)
 		}
 		lista = append(lista, b)
 	}
-	return lista, rows.Err()
+	return lista, total, rows.Err()
 }
 
 // ExcluirBase remove uma base.

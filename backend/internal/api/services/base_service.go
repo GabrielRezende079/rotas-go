@@ -13,7 +13,7 @@ import (
 // BaseStorage é a persistência de bases (localizações padrão).
 type BaseStorage interface {
 	CriarBase(ctx context.Context, nome string, lat, lng float64) (storage.Base, error)
-	ListarBases(ctx context.Context) ([]storage.Base, error)
+	ListarBases(ctx context.Context, f storage.ListaFiltro) ([]storage.Base, int, error)
 	ExcluirBase(ctx context.Context, id int64) error
 }
 
@@ -50,20 +50,21 @@ func (s *BaseService) CriarBase(ctx context.Context, req dtos.CriarBaseRequest) 
 	return resumoDeBase(b), nil
 }
 
-// ListarBases devolve todas as bases cadastradas.
-func (s *BaseService) ListarBases(ctx context.Context) ([]dtos.BaseResponse, error) {
+// ListarBases devolve uma página de bases, com filtragem por nome.
+func (s *BaseService) ListarBases(ctx context.Context, f storage.ListaFiltro) (dtos.BasesResponse, error) {
 	if s.store == nil {
-		return nil, semPersistencia()
+		return dtos.BasesResponse{}, semPersistencia()
 	}
-	lista, err := s.store.ListarBases(ctx)
+	f = normalizarFiltro(f)
+	lista, total, err := s.store.ListarBases(ctx, f)
 	if err != nil {
-		return nil, err
+		return dtos.BasesResponse{}, err
 	}
 	resumo := make([]dtos.BaseResponse, 0, len(lista))
 	for _, b := range lista {
 		resumo = append(resumo, resumoDeBase(b))
 	}
-	return resumo, nil
+	return dtos.BasesResponse{Items: resumo, Total: total, Limite: f.Limite, Offset: f.Offset}, nil
 }
 
 // ExcluirBase remove uma base.

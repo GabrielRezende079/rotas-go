@@ -18,7 +18,10 @@ type CriarBaseRequest struct {
 	Lng  float64 `json:"lng" binding:"required"`
 }
 
-// BasesResponse é a resposta de GET /api/v1/bases.
+// BasesResponse é a resposta paginada de GET /api/v1/bases.
 type BasesResponse struct {
-	Bases []BaseResponse `json:"bases"`
+	Items  []BaseResponse `json:"items"`
+	Total  int            `json:"total"`
+	Limite int            `json:"limit"`
+	Offset int            `json:"offset"`
 }

@@ -62,8 +62,8 @@ func (f *storeFake) Salvar(_ context.Context, nome, algoritmo string, veiculos i
 	}, nil
 }
 
-func (f *storeFake) Listar(_ context.Context) ([]storage.RotaSalva, error) {
-	return nil, nil
+func (f *storeFake) Listar(_ context.Context, _ storage.ListaFiltro) ([]storage.RotaSalva, int, error) {
+	return nil, 0, nil
 }
 
 func (f *storeFake) Buscar(_ context.Context, _ int64) (storage.RotaSalva, error) {
@@ -82,8 +82,8 @@ func (f *storeFake) CriarBase(_ context.Context, nome string, lat, lng float64) 
 	return b, nil
 }
 
-func (f *storeFake) ListarBases(_ context.Context) ([]storage.Base, error) {
-	return f.bases, nil
+func (f *storeFake) ListarBases(_ context.Context, _ storage.ListaFiltro) ([]storage.Base, int, error) {
+	return f.bases, len(f.bases), nil
 }
 
 func (f *storeFake) ExcluirBase(_ context.Context, id int64) error {
