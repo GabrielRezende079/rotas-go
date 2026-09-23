@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS vehicles (
+    id BIGSERIAL PRIMARY KEY,
+    modelo TEXT NOT NULL,
+    categoria TEXT NOT NULL,
+    placa TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL,
+    kilometragem DOUBLE PRECISION NOT NULL DEFAULT 0,
+    velocidade DOUBLE PRECISION NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

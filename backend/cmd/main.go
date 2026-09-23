@@ -9,9 +9,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"rotas-go/internal/api/controllers"
+	"rotas-go/internal/api/services"
 	"rotas-go/internal/grafo"
 	"rotas-go/internal/storage"
-	"rotas-go/routes"
 )
 
 func main() {
@@ -25,36 +26,50 @@ func main() {
 		meta.GeradoEm.Format(time.RFC3339),
 	)
 
-	var store routes.SavedRouteStore
+	var store *storage.PostgresStore
 	if url := os.Getenv("DATABASE_URL"); url != "" {
-		pg := inicializarArmazenamento(url)
-		defer pg.Close()
-		store = pg
+		store = inicializarArmazenamento(url)
+		defer store.Close()
 	} else {
-		log.Println("DATABASE_URL não definida; rotas salvas desabilitadas")
+		log.Println("DATABASE_URL não definida; rotas salvas, bases e veículos desabilitados")
 	}
 
-	service := routes.NewRouteService(g, store)
-	controller := routes.NewRouteController(service)
+	infoService := services.NewInfoService(g)
+	routeService := services.NewRouteService(g)
+	alternativeService := services.NewAlternativeService(g)
+	savedRouteService := services.NewSavedRouteService(store)
+	baseService := services.NewBaseService(store)
+	vehicleService := services.NewVehicleService(store)
+
+	infoController := controllers.NewInfoController(infoService)
+	routeController := controllers.NewRouteController(routeService)
+	alternativeController := controllers.NewAlternativeController(alternativeService)
+	savedRouteController := controllers.NewSavedRouteController(savedRouteService)
+	baseController := controllers.NewBaseController(baseService)
+	vehicleController := controllers.NewVehicleController(vehicleService)
+
 	engine := gin.Default()
 	_ = engine.SetTrustedProxies(nil)
-	engine.Use(routes.CORSMiddleware())
+	engine.Use(controllers.CORSMiddleware())
 
 	engine.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 	api := engine.Group("/api/v1")
-	api.GET("/info", controller.Info)
-	api.POST("/route", controller.CalcularRota)
-	api.POST("/route/alternatives", controller.CalcularAlternativas)
-	api.POST("/routes", controller.CalcularLote)
-	api.POST("/routes/saved", controller.SalvarRota)
-	api.GET("/routes/saved", controller.ListarRotasSalvas)
-	api.GET("/routes/saved/:id", controller.BuscarRotaSalva)
-	api.DELETE("/routes/saved/:id", controller.ExcluirRotaSalva)
-	api.POST("/bases", controller.CriarBase)
-	api.GET("/bases", controller.ListarBases)
-	api.DELETE("/bases/:id", controller.ExcluirBase)
+	api.GET("/info", infoController.Info)
+	api.POST("/route", routeController.CalcularRota)
+	api.POST("/route/alternatives", alternativeController.CalcularAlternativas)
+	api.POST("/routes", routeController.CalcularLote)
+	api.POST("/routes/saved", savedRouteController.SalvarRota)
+	api.GET("/routes/saved", savedRouteController.ListarRotasSalvas)
+	api.GET("/routes/saved/:id", savedRouteController.BuscarRotaSalva)
+	api.DELETE("/routes/saved/:id", savedRouteController.ExcluirRotaSalva)
+	api.POST("/bases", baseController.CriarBase)
+	api.GET("/bases", baseController.ListarBases)
+	api.DELETE("/bases/:id", baseController.ExcluirBase)
+	api.POST("/vehicles", vehicleController.CriarVeiculo)
+	api.GET("/vehicles", vehicleController.ListarVeiculos)
+	api.DELETE("/vehicles/:id", vehicleController.ExcluirVeiculo)
 
 	if err := engine.Run(":" + porta()); err != nil {
 		log.Fatal(err)
@@ -71,7 +86,7 @@ func inicializarArmazenamento(url string) *storage.PostgresStore {
 		pg.Close()
 		log.Fatalf("migração do banco falhou: %v", err)
 	}
-	log.Println("persistência PostgreSQL habilitada (rotas salvas)")
+	log.Println("persistência PostgreSQL habilitada (rotas salvas, bases, veículos)")
 	return pg
 }
 

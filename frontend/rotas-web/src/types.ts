@@ -125,3 +125,36 @@ export interface Base {
   lng: number
   created_at: string
 }
+
+export type CategoriaVeiculo = 'Carro' | 'Caminhão' | 'Caminhonete' | 'Furgão'
+
+export type StatusVeiculo = 'Disponível' | 'Indisponível' | 'Em uso' | 'Em Manutenção'
+
+export interface Veiculo {
+  id: number
+  modelo: string
+  categoria: CategoriaVeiculo
+  placa: string
+  status: StatusVeiculo
+  kilometragem: number
+  velocidade: number
+  created_at: string
+}
+
+export const CATEGORIAS_VEICULO: CategoriaVeiculo[] = ['Carro', 'Caminhão', 'Caminhonete', 'Furgão']
+
+export const STATUS_VEICULO: StatusVeiculo[] = [
+  'Disponível',
+  'Indisponível',
+  'Em uso',
+  'Em Manutenção',
+]
+
+export interface NovoVeiculo {
+  modelo: string
+  categoria: CategoriaVeiculo
+  placa: string
+  status: StatusVeiculo
+  kilometragem: number
+  velocidade: number
+}

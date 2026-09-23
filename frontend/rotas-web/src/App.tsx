@@ -13,6 +13,7 @@ import {
 } from './api/routes'
 import RouteMap from './components/RouteMap'
 import RoutePanel from './components/RoutePanel'
+import VehiclesView from './components/VehiclesView'
 import type { AltState } from './components/AltStepper'
 import type {
   Algorithm,
@@ -21,12 +22,17 @@ import type {
   Cost,
   GraphInfo,
   LatLng,
+  NovoVeiculo,
   RouteLeg,
   RouteResponse,
   SavedRouteSummary,
+  Veiculo,
   VehicleRoute,
 } from './types'
+import { createVehicle, deleteVehicle, listVehicles } from './api/vehicles'
 import './App.css'
+
+type Visao = 'rotas' | 'veiculos'
 
 function criarVeiculo(numero: number): VehicleRoute {
   return { id: crypto.randomUUID(), label: `Veículo ${numero}`, points: [] }
@@ -56,11 +62,14 @@ function App() {
   const [bases, setBases] = useState<Base[]>([])
   const [addingBase, setAddingBase] = useState(false)
   const [baseName, setBaseName] = useState('')
+  const [view, setView] = useState<Visao>('rotas')
+  const [veiculosCadastrados, setVeiculosCadastrados] = useState<Veiculo[]>([])
 
   useEffect(() => {
     getGraphInfo().then(setGraphInfo).catch(() => setGraphInfo(null))
     listSavedRoutes().then(setSavedRoutes).catch(() => setSavedRoutes([]))
     listBases().then(setBases).catch(() => setBases([]))
+    listVehicles().then(setVeiculosCadastrados).catch(() => setVeiculosCadastrados([]))
   }, [])
 
   const sairDasAlternativas = () => {
@@ -305,6 +314,16 @@ function App() {
     }
   }
 
+  const cadastrarVeiculo = async (req: NovoVeiculo) => {
+    const veiculo = await createVehicle(req)
+    setVeiculosCadastrados((prev) => [veiculo, ...prev])
+  }
+
+  const excluirVeiculo = async (id: number) => {
+    await deleteVehicle(id)
+    setVeiculosCadastrados((prev) => prev.filter((v) => v.id !== id))
+  }
+
   const selecionarVeiculo = (id: string) => {
     if (id !== activeVehicleId) {
       sairDasAlternativas()
@@ -379,59 +398,90 @@ function App() {
 
   return (
     <div className="app">
-      <RoutePanel
-        algorithm={algorithm}
-        onAlgorithmChange={setAlgorithm}
-        cost={cost}
-        onCostChange={setCost}
-        vehicles={vehicles}
-        activeVehicleId={activeVehicleId}
-        results={results}
-        loading={loading}
-        saving={saving}
-        error={error}
-        notice={notice}
-        canCalculate={canCalculate}
-        graphInfo={graphInfo}
-        savedRoutes={savedRoutes}
-        saveName={saveName}
-        onSaveNameChange={setSaveName}
-        onSelectVehicle={selecionarVeiculo}
-        onAddVehicle={addVehicle}
-        onRemoveVehicle={removeVehicle}
-        onUpdateLabel={updateLabel}
-        onRemovePoint={removePoint}
-        onCalculate={handleCalculate}
-        onAlternatives={handleAlternatives}
-        onClear={handleClear}
-        onSave={handleSave}
-        onLoadSaved={loadSaved}
-        onDeleteSaved={deleteSaved}
-        alt={alt}
-        onSelectAlternative={selectAlternative}
-        onApplyAlternatives={applyAlternatives}
-        onCancelAlternatives={sairDasAlternativas}
-        bases={bases}
-        addingBase={addingBase}
-        baseName={baseName}
-        onBaseNameChange={setBaseName}
-        onStartAddBase={startAddBase}
-        onCancelAddBase={cancelAddBase}
-        onSelectBase={selectBaseAsPoint}
-        onDeleteBase={handleDeleteBase}
-      />
-      <RouteMap
-        vehicles={vehicles}
-        activeVehicleId={activeVehicleId}
-        results={results}
-        alt={alt}
-        altVehicleId={altVehicleId}
-        bases={bases}
-        onMapClick={handleMapClick}
-        onPointDrag={movePoint}
-        onSelectAlternative={selectAlternative}
-        onSelectBase={selectBaseAsPoint}
-      />
+      <header className="app-topbar">
+        <span className="app-brand">Rotas Go</span>
+        <nav className="view-tabs">
+          <button
+            type="button"
+            className={view === 'rotas' ? 'view-tab view-tab-active' : 'view-tab'}
+            onClick={() => setView('rotas')}
+          >
+            Rotas
+          </button>
+          <button
+            type="button"
+            className={view === 'veiculos' ? 'view-tab view-tab-active' : 'view-tab'}
+            onClick={() => setView('veiculos')}
+          >
+            Veículos
+          </button>
+        </nav>
+      </header>
+      <div className="app-body">
+        {view === 'rotas' ? (
+          <>
+            <RoutePanel
+              algorithm={algorithm}
+              onAlgorithmChange={setAlgorithm}
+              cost={cost}
+              onCostChange={setCost}
+              vehicles={vehicles}
+              activeVehicleId={activeVehicleId}
+              results={results}
+              loading={loading}
+              saving={saving}
+              error={error}
+              notice={notice}
+              canCalculate={canCalculate}
+              graphInfo={graphInfo}
+              savedRoutes={savedRoutes}
+              saveName={saveName}
+              onSaveNameChange={setSaveName}
+              onSelectVehicle={selecionarVeiculo}
+              onAddVehicle={addVehicle}
+              onRemoveVehicle={removeVehicle}
+              onUpdateLabel={updateLabel}
+              onRemovePoint={removePoint}
+              onCalculate={handleCalculate}
+              onAlternatives={handleAlternatives}
+              onClear={handleClear}
+              onSave={handleSave}
+              onLoadSaved={loadSaved}
+              onDeleteSaved={deleteSaved}
+              alt={alt}
+              onSelectAlternative={selectAlternative}
+              onApplyAlternatives={applyAlternatives}
+              onCancelAlternatives={sairDasAlternativas}
+              bases={bases}
+              addingBase={addingBase}
+              baseName={baseName}
+              onBaseNameChange={setBaseName}
+              onStartAddBase={startAddBase}
+              onCancelAddBase={cancelAddBase}
+              onSelectBase={selectBaseAsPoint}
+              onDeleteBase={handleDeleteBase}
+            />
+            <RouteMap
+              vehicles={vehicles}
+              activeVehicleId={activeVehicleId}
+              results={results}
+              alt={alt}
+              altVehicleId={altVehicleId}
+              bases={bases}
+              onMapClick={handleMapClick}
+              onPointDrag={movePoint}
+              onSelectAlternative={selectAlternative}
+              onSelectBase={selectBaseAsPoint}
+            />
+          </>
+        ) : (
+          <VehiclesView
+            veiculos={veiculosCadastrados}
+            onCadastrar={cadastrarVeiculo}
+            onExcluir={excluirVeiculo}
+          />
+        )}
+      </div>
     </div>
   )
 }

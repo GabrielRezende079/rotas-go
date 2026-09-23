@@ -106,7 +106,6 @@ function RoutePanel({
   return (
     <aside className="sidebar">
       <header className="sidebar-header">
-        <h1>Rotas Go</h1>
         <p>
           Menor rota na malha viária real do Espírito Santo, calculada pelo nosso próprio Dijkstra
           ou A*.

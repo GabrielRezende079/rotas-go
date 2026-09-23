@@ -26,6 +26,19 @@ nós consecutivos vira uma aresta. Os pesos de distância são calculados sobre 
 geometria real da via; a duração estimada usa `maxspeed` quando disponível e
 uma velocidade padrão por classe da via nos demais casos.
 
+O código do backend (em `backend/`) segue uma arquitetura em camadas com um
+arquivo por função:
+
+```text
+backend/cmd/main.go                  → composição (wiring) de serviços e controllers
+backend/internal/api/controllers/    → handlers HTTP (um arquivo por função)
+backend/internal/api/dtos/           → tipos de entrada/saída do contrato JSON
+backend/internal/api/services/       → regras de negócio (um serviço por função)
+backend/internal/storage/            → PostgreSQL (um arquivo por domínio)
+backend/internal/grafo/              → grafo, Dijkstra, A*, Yen e alternativas
+backend/migrations/                  → SQL versionado (rotas salvas, bases, veículos)
+```
+
 ## Preparar os dados reais
 
 Requisitos no macOS:
@@ -116,6 +129,21 @@ No frontend, as bases aparecem no mapa com o marcador rotulado e podem ser
 usadas como ponto da rota do veículo ativo: clicar na base adiciona o ponto na
 ordem selecionada (o 1º vira origem, o último destino e os do meio são paradas
 intermediárias).
+
+### Veículos
+
+- `POST /api/v1/vehicles`: cadastra um veículo da frota com `modelo`,
+  `categoria`, `placa`, `status`, `kilometragem` e `velocidade`; `categoria`
+  aceita `Carro`, `Caminhão`, `Caminhonete` e `Furgão`, e `status` aceita
+  `Disponível`, `Indisponível`, `Em uso` e `Em Manutenção`. A placa é validada
+  (formato antigo `ABC-1234` ou Mercosul `ABC1D23`), normalizada em maiúsculas
+  e é única no banco — duplicidade retorna `409`.
+- `GET /api/v1/vehicles`: lista os veículos cadastrados (mais recentes primeiro).
+- `DELETE /api/v1/vehicles/:id`: exclui um veículo.
+
+No frontend, a aba **Veículos** (topo da tela) abre uma tela dedicada com
+formulário de cadastro à esquerda e a tabela da frota à direita, com indicador
+de status colorido por situação.
 
 O campo `cost` (opcional) escolhe a métrica a minimizar nas rotas e
 alternativas: `duration` (padrão, tempo estimado em minutos) ou `distance`
